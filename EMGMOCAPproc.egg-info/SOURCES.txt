@@ -1,0 +1,8 @@
+setup.py
+EMGMOCAPproc/__init__.py
+EMGMOCAPproc/myfunctions.py
+EMGMOCAPproc.egg-info/PKG-INFO
+EMGMOCAPproc.egg-info/SOURCES.txt
+EMGMOCAPproc.egg-info/dependency_links.txt
+EMGMOCAPproc.egg-info/requires.txt
+EMGMOCAPproc.egg-info/top_level.txt

@@ -1,0 +1,3 @@
+c3d
+pickleshare
+matplotlib
