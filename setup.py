@@ -12,7 +12,7 @@ setup(
     description='My first Python library',
     author='Me',\
     license='MIT',
-    install_requires = ['c3d','pickleshare','matplotlib'],
+    install_requires = ['c3d','pickleshare','matplotlib','PIP'],
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     test_suite='Tests',

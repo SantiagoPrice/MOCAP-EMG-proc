@@ -1,0 +1,8 @@
+{
+    "python.pythonPath":"C:/Users/UTAIL/miniconda3/envs/MOCAPyEMG/python.exe",
+    
+    "python.terminal.activateEnvironment": true,
+    "python.condaPath":"C:\\Users\\UTAIL\\miniconda3\\Scripts\\activate.bat",
+    
+    "terminal.integrated.defaultProfile.windows": "Anaconda"
+    }
