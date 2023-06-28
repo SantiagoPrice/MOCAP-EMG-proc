@@ -6,30 +6,42 @@ import quaternion
 import pickle
 import os
 
-def crd2dict (file_address):
-    c = c3d(file_address)
+def crd2dict (file_addresses):
+    
+    c3ds=[]
+    for file_address in file_addresses:
+        c = c3d(file_address)
+    
+        #MoCap Points -----------------------------------------------------------
+        point_data = c['data']['points'][0:3,:,:]
+    
+        marker_dict=dict()
+    
+        used_markers= 7
+    
+        for i , marker_name in enumerate(c['parameters']['POINT']['LABELS']["value"]):           
+            marker_dict.update({marker_name:point_data[0:3,i,:].T}) 
+            if i == used_markers:
+                break 
 
-    #MoCap Points -----------------------------------------------------------
-    point_data = c['data']['points'][0:3,:,:]
-
-    marker_dict=dict()
-
-    used_markers= 7
-
-    for i , marker_name in enumerate(c['parameters']['POINT']['LABELS']["value"]):
-             
-        marker_dict.update({marker_name:point_data[0:3,i,:].T}) 
-        if i == used_markers:
-            break
-
-    #Emg Data --------------------------------------------------------------
-    analog_data = c['data']['analogs']
-
-    EMG_dict = {"EMG":  analog_data[0,:,:]}
-
-    Global_dict = {'MOCAP':marker_dict, 'EMG':EMG_dict }
-
-    return Global_dict
+        #Emg Data --------------------------------------------------------------
+        analog_data = c['data']['analogs']
+    
+        EMG_data = analog_data[0,:,:]
+        
+        #Sampling _frequency-----------------------------------------------------------------
+        
+        sfmc=c['header']['points']['frame_rate'] #Sampling frequency of MoCap
+        sfemg=c['header']['analogs']['frame_rate'] #Sampling frequency of EMG
+        
+        # Making list of c3ds
+        c3ds.append({'MOCAP':marker_dict, 'EMG':EMG_data ,"SFMC": sfmc , "SFEMG": sfemg})
+    
+    c3dfin=c3ds.pop(0)
+    for C3D in c3ds:
+        c3dfin["MOCAP"]=np.append(c3dfin["MOCAP"],c3dfin["MOCAP"],axis=0)
+        c3dfin["EMG"]=np.append(c3dfin["EMG"],c3dfin["EMG"],axis=1)
+    return c3dfin
 
 
 def GetQuat(a,b):
@@ -42,13 +54,98 @@ def GetQuat(a,b):
     
     return quaternion.from_rotation_vector(rotAxis)
 
-def get_kin_MOCAP(dirs,c3dfolder):
+
+class partic_MOCAP_EMG:
+    """ Class that contains the kinematic and EMG data of one participant
+    """
+    def __init__(self,c3ds,cond=""):
+        """
+        The class is created based on one or several concatenated crd files
+        
+        Input: 
+            .c3ds: absolute directories of .c3d files that will be concatenated
+            .cond: condition or trial number
+        """
+        self.Tbound = None
+        self.mot = None
+        self.label = cond
+        
+        
+        "Kinematic analysis"
+        
+        s = crd2dict (c3ds)
+        
+        HeadTraj = {'frontl' : s['MOCAP']['hlf'] , 'backl' : s['MOCAP']['hlb'] , 'frontr': s['MOCAP']['hrf'] , 'backr': s['MOCAP']['hrb']}; 
+        ShouldTraj = {'SupL': s['MOCAP']['dlt'] , 'SupR': s['MOCAP']['drt'] , 'InfL' : s['MOCAP']['dlb'] , 'InfR': s['MOCAP']['drb']}; 
+        
+        globalFrame = np.eye(3); 
+        
+        Should_orient = get_orient(ShouldTraj , globalFrame , axis_form_square_arrangement_back);
+        Head_orient  = get_orient(HeadTraj , globalFrame , axis_form_square_arrangement_head);
+                
+        #Head_orient = Head_orient         
+        #Should_orient = np.full(Should_orient.shape,quaternion.quaternion(1,0,0,0))
+            
+        headYPR_abs = getYPR(Head_orient)
+        bodyYPR_abs = getYPR(Should_orient)
+        headYPR_rel = getYPR(Head_orient * Should_orient.conjugate())
+        
+        self.RPY = {"head_abs" : np.array(headYPR_abs) , "body_abs": np.array(bodyYPR_abs) , "head_rel" : np.array(headYPR_rel)}
+        self.EMG= s["EMG"]
+        self.Mrk_samp = {"head":s['MOCAP']['hlf'],"back":s['MOCAP']['dlt']}
+        self.sfmc = s["SFMC"]
+        self.sfemg = s ["SFEMG"]
+        
+    def set_boundaries(self , seq):
+        """
+        This function ask for manually indicate the boundary points of the flexion
+        and extension of the motion sequence. Such a data is stored in the dictionary.
+        The clicks are from left to right starting from the beginnning and end of each neck motion
+        
+
+        Input:
+        dict_data : dictionary that contains the MOCAP data
+        seq : list discribing which type of motion correspond each pair of values
+            "s" is for sagital motion , "c" for coronal motion and "r" for axial rotation
+
+        """
+        
+        Xl = r'time' 
+        Yl= [r"$\alpha_{sag}$" , r"$\beta_{cor}$" , r"$\gamma_{ax}$"]         
+        plt.figure()
+        RPY = self.RPY["head_abs"]
+        time= np.arange(RPY.shape[1])/self.sfmc
+        plt.plot(time,RPY.T)
+        plt.title(r"{:s}: ".format(self.label)) 
+        plt.xlabel(Xl)
+        #plt.ylabel(Yl_2)
+        plt.legend(Yl)
+        
+        
+        self.mot = list(set(seq))
+        self.Tbound= dict.fromkeys(self.mot , np.array(np.empty((2,0))))
+
+          
+        nclicks = np.array(seq).size*4
+        print("Make {} clicks".format(nclicks))
+        boundaries=plt.ginput(nclicks,timeout=-1)
+        boundaries=[bound[0] for bound in boundaries]
+        boundaries=np.array(boundaries).reshape(-1,2,2)
+        for i , motion in enumerate(seq):            
+            self.Tbound[motion] = np.append(self.Tbound[motion],boundaries[i,:,:],axis=1)
+    
+        
+    def __str__(self):
+         return f"{self.label}"
+     
+
+def get_kin_MOCAP(dirs):
     """
     Function that takes converted converted c3d data in mat file and return dict with angles and
     EMG recording
     
     Input: 
-        .dirs: absolute directories of .mat files
+        .dirs: absolute directories of .c3d files that will be concatenated
 
     Output:
         .Q_MOCAP: dictionary with the orientation and EMG data for each case
