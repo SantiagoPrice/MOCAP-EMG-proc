@@ -6,7 +6,12 @@ import quaternion
 import pickle
 import os
 from scipy.signal import butter, filtfilt
-import MRKs2REFs
+
+import sys 
+EMGMOCAPpt =r"C:\Users\UTAIL\OneDrive\Documents\GitHub\MOCAP-EMG-proc"
+if not sys.path.count(EMGMOCAPpt):
+    sys.path.append(EMGMOCAPpt)
+from EMGMOCAPpt import MRKs2REFs
 
 def crd2dict (file_addresses):
     
