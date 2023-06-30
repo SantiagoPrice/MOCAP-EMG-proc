@@ -99,7 +99,7 @@ def axis_form_square_arrangement_back (Markers):
      
      
      
-     v = (Markers['SupL'] - Markers['SupR'])+(Markers['InfR'] - Markers['InfL'])
+     v = (Markers['SupL'] - Markers['SupR'])+(Markers['InfL'] - Markers['InfR'])
      proj = np.sum(v*w,axis=1).reshape(-1,1);         #projection of v in u or viceversa
      v = (v- proj * w);                 # removing V component in the u direction
      vnorm = np.linalg.norm(v,axis=1).reshape(-1,1)

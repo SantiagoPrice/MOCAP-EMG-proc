@@ -1,17 +1,17 @@
 from ezc3d import c3d
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.cbook as cbook
 import quaternion
-import pickle
 import os
 from scipy.signal import butter, filtfilt
+import AUX
 
 import sys 
 EMGMOCAPpt =r"C:\Users\UTAIL\OneDrive\Documents\GitHub\MOCAP-EMG-proc"
 if not sys.path.count(EMGMOCAPpt):
     sys.path.append(EMGMOCAPpt)
-from EMGMOCAPpt import MRKs2REFs
+    
+from EMGMOCAPproc import MRKs2REFs
 
 def crd2dict (file_addresses):
     
@@ -112,15 +112,18 @@ class trial_MOCAP_EMG:
         
         Xl = r'time' 
         Yl= [r"$\alpha_{sag}$" , r"$\beta_{cor}$" , r"$\gamma_{ax}$"]         
-        fig=plt.figure()
+        fig = plt.figure()
+        ax = plt.axes()
+        
         RPY = self.RPY["head_abs"]
         time= np.arange(RPY.shape[1])/self.sfmc
-        plt.plot(time,RPY.T)
-        plt.title(r"{:s}: ".format(self.label)) 
-        plt.xlabel(Xl)
+        ax.plot(time,RPY.T)
+        ax.set_title(r"{:s}: ".format(self.label)) 
+        ax.set_xlabel(Xl)
         #plt.ylabel(Yl_2)
-        plt.legend(Yl)
-        fig.full_screen_toggle()
+        ax.legend(Yl)
+        mng=plt.get_current_fig_manager()
+        mng.full_screen_toggle()
         
         self.mot = list(set(seq))
         self.Tbound= dict.fromkeys(self.mot , np.array(np.empty((2,0))))
@@ -129,6 +132,7 @@ class trial_MOCAP_EMG:
         nclicks = np.array(seq).size*4
         print("File {} . Make {} clicks".format(self.label,nclicks))
         boundaries=plt.ginput(nclicks,timeout=-1)
+        #boundaries=AUX.get_bound(nclicks,fig,ax)
         boundaries=[bound[0] for bound in boundaries]
         boundaries=np.array(boundaries).reshape(-1,2,2)
         for i , motion in enumerate(seq):            
