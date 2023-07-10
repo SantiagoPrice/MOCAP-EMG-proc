@@ -4,15 +4,25 @@ import matplotlib.pyplot as plt
 import quaternion
 import os
 from scipy.signal import butter, filtfilt
-import AUX
+import pandas
 
 import sys 
 EMGMOCAPpt =r"C:\Users\UTAIL\OneDrive\Documents\GitHub\MOCAP-EMG-proc"
 if not sys.path.count(EMGMOCAPpt):
     sys.path.append(EMGMOCAPpt)
     
-from EMGMOCAPproc import MRKs2REFs
+from EMGMOCAPproc import MRKs2REFs , AUX
 
+# =============================================================================
+# Auxiliar variables
+# =============================================================================
+
+DEF_HMkrs = MRKs2REFs.axis_form_square_arrangement_head
+DEF_SMkrs = MRKs2REFs.axis_form_square_arrangement_back
+
+# =============================================================================
+# Functions
+# =============================================================================
 def crd2dict (file_addresses):
     
     c3ds=[]
@@ -52,11 +62,14 @@ def crd2dict (file_addresses):
         c3dfin["EMG"]=np.append(c3dfin["EMG"],c3dfin["EMG"],axis=1)
     return c3dfin
 
+# =============================================================================
+# Classes
+# =============================================================================
 
 class trial_MOCAP_EMG:
     """ Class that contains the kinematic and EMG data of one trial for a given participant
     """
-    def __init__(self,c3ds,cond=""):
+    def __init__(self,c3ds, IMU= None,cond="",hmrks = DEF_HMkrs , smrks=DEF_SMkrs):
         """
         The class is created based on one or several concatenated crd files
         
@@ -68,6 +81,13 @@ class trial_MOCAP_EMG:
         self.mot = None
         self.label = cond
         
+        if not IMU == None:
+            with open(IMU,"r"):
+                df = pandas.read_csv(IMU)
+                self.IMU ={"meas": df.iloc[:,:3].to_numpy() , "target": df.iloc[:,3:].to_numpy() } 
+                
+        else:
+            self.IMU = None
         
         "Kinematic analysis"
         
@@ -78,8 +98,8 @@ class trial_MOCAP_EMG:
         
         globalFrame = np.eye(3); 
         
-        Should_orient = get_orient(ShouldTraj , globalFrame , MRKs2REFs.axis_form_square_arrangement_back);
-        Head_orient  = get_orient(HeadTraj , globalFrame , MRKs2REFs.axis_form_square_arrangement_head);
+        Should_orient = get_orient(ShouldTraj , globalFrame , smrks);
+        Head_orient  = get_orient(HeadTraj , globalFrame , hmrks);
                 
         #Head_orient = Head_orient         
         #Should_orient = np.full(Should_orient.shape,quaternion.quaternion(1,0,0,0))
@@ -131,9 +151,9 @@ class trial_MOCAP_EMG:
           
         nclicks = np.array(seq).size*4
         print("File {} . Make {} clicks".format(self.label,nclicks))
-        boundaries=plt.ginput(nclicks,timeout=-1)
-        #boundaries=AUX.get_bound(nclicks,fig,ax)
-        boundaries=[bound[0] for bound in boundaries]
+        #boundaries=plt.ginput(nclicks,timeout=-1)
+        #boundaries=[bound[0] for bound in boundaries]
+        boundaries=AUX.get_bound(nclicks,fig,ax)
         boundaries=np.array(boundaries).reshape(-1,2,2)
         for i , motion in enumerate(seq):            
             self.Tbound[motion] = np.append(self.Tbound[motion],boundaries[i,:,:],axis=1)
@@ -149,6 +169,21 @@ class trial_MOCAP_EMG:
             filt_data.update({raw_angles[0]:filtfilt(b, a, raw_angles[1])})
         return filt_data
         
+    def seq_from_IMU(self,start=3000,stride=2000):
+        """
+        Return sequence list from the recording of the GUI's recording of the target
+        """
+        target = self.IMU["target"]
+        probe = start
+        motions = ["s","l","r"]
+        seq=[]
+        while probe < target.shape[0]:
+            ang_probe = target[probe,:]
+            index = np.argmin(-abs(ang_probe))
+            motion = motions [index] 
+            seq.append(f"{motion}{int(ang_probe[index]*180/np.pi)}")
+            probe += stride
+        return seq
     
     def show_DSET_map():
         pardir = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -192,7 +227,6 @@ def get_orient(Markers,globalFrame,MrkConf):
      ''' The orientation of both frames are aligned tih the global frame at the
      beginning of the experiment'''     
      return Orient
-
      
 
 getYPR = np.vectorize(lambda q: yawPitchRoll(q,ls=False),otypes=["f"]*3) 
