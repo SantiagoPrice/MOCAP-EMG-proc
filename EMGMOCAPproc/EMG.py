@@ -1,5 +1,5 @@
 import numpy as np
-
+from scipy.signal import butter, filtfilt
 
 # def EMG_means(MOCAP_EMG,trial):
 #        #for i, trial in enumerate (MOCAP_EMG):
@@ -29,13 +29,34 @@ import numpy as np
 #         return EMG_means
 #         #MOCAP_EMG[trial].update({"EMG_mean":EMG_means})
 
-def EMG_means(MC_EMG,condition):     
+def EMG_filt(EMG_raw,Fs,rect=False):
+    EMG_filt=EMG_raw.copy()
+    # Select the desired array to filter and plot (e.g., index 0 for the first array)
+    # Define the filter parameters
+    order = 4  # Filter order
+    cutoff_freqs = [[10,400],[30],[49,51]]  # Cutoff frequencies for filtering
+    btypes= ["bandpass","highpass","bandstop"]
+    
+    
+    for cutoff_freq , bt in zip(cutoff_freqs,btypes):
+        # Design the Butterworth low-pass filter
+        b, a = butter(order, cutoff_freq, btype=bt, analog=False, output='ba',fs=Fs)
+        # Apply the filter to the curve
+        EMG_filt = filtfilt(b, a,EMG_filt)
+    if rect == True:
+        EMG_rect=abs(EMG_filt)
+        #print(EMG_rect.mean(axis=-1).reshape(-1,1))
+        return EMG_rect
+    else:
+        return EMG_filt
+
+
+def EMG_means(MC_EMG,condition , channels=[0,8,9,10]):     
         time = np.arange(MC_EMG.EMG.shape[1])/MC_EMG.sfemg
-        EMGs = np.empty((2,0))
+        EMGs = np.empty((0,len(channels),2))
         for motion in MC_EMG.mot: 
             rflex = MC_EMG.Tbound[motion][:1,:].reshape([-1,2])
             rext = MC_EMG.Tbound[motion][1:,:].reshape([-1,2])
-            
             if condition == "mean_full": 
                 cond = (np.logical_and(time > rflex[:,:1] , time < rext[:,1:2])).any(axis=0)
                 
@@ -45,9 +66,22 @@ def EMG_means(MC_EMG,condition):
             elif condition == "mean_ext":
                 cond =(np.logical_and(time > rext[:,:1] , time < rext[:,1:2])).any(axis=0)
             else:
-                raise NameError("Non valid condition")
-            EMG_select = MC_EMG.EMG[:,cond] 
-            EMGs_stats = np.vstack(( EMG_select.mean(axis = 1) , EMG_select.std(axis=1)))
-            EMGs=np.hstack((EMGs,EMGs_stats))
+                raise NameError("Non valid condition: chose between mean_full, mean_flex or mean_ext")
+            chan = np.array(channels, dtype=np.intp)
+            EMG_select = MC_EMG.EMG[chan]
+            EMG_select = EMG_filt( EMG_select[:,cond] , MC_EMG.sfemg , rect=True)
+            EMG_select=moving_average(EMG_select,300)
+            #EMG_select-=EMG_select.min(axis=-1).reshape(-1,1)
+            #print(EMG_select.min(axis=-1))
+            #print(EMG_select.min(axis=-1))
+            EMGs_stats = np.dstack((EMG_select.mean(axis = 1) , EMG_select.std(axis=1)))
+            #print(max(abs(EMG_select.std(axis=1))))
+            EMGs=np.vstack((EMGs,EMGs_stats))
+            
              
         return EMGs
+    
+def moving_average(a, n=3):
+    ret = np.cumsum(a, axis=-1,dtype=float)
+    ret[:,n:] = ret[:,n:] - ret[:,:-n]
+    return ret[:,n - 1:] / n

@@ -169,13 +169,15 @@ class trial_MOCAP_EMG:
             filt_data.update({raw_angles[0]:filtfilt(b, a, raw_angles[1])})
         return filt_data
         
-    def seq_from_IMU(self,start=3000,stride=2000):
+    def seq_from_IMU(self,start=700,stride=2000):
         """
         Return sequence list from the recording of the GUI's recording of the target
         """
+        reference=set(['s-13', 'l13', 'r-29', 'r9', 'r-9', 's40', 'l-40', 'l-13', 'l40', 's-40','r29', 's13'])
         target = self.IMU["target"]
-        probe = start
-        motions = ["s","l","r"]
+        probe = min(np.argmin(target==0,axis=0))+start
+        
+        motions = ["s","r","l"]
         seq=[]
         while probe < target.shape[0]:
             ang_probe = target[probe,:]
@@ -183,7 +185,55 @@ class trial_MOCAP_EMG:
             motion = motions [index] 
             seq.append(f"{motion}{int(ang_probe[index]*180/np.pi)}")
             probe += stride
+        if len(seq) == 11: 
+            seq.append(set(reference).difference(seq).pop())
         return seq
+    
+    def get_mean_ang(self, neutral = True):
+        
+        if self.Tbound == None:
+            print ("Define limits first")
+            return
+        time = np.arange(self.RPY["head_rel"].shape[1])/self.sfmc
+        
+        if neutral:
+            flex_str= np.empty([0,1])
+            ext_end= np.empty([0,1])
+            
+            for motion in self.mot: 
+                rflex = self.Tbound[motion][:1,:].reshape([-1,2])[:,0:1]
+                rext = self.Tbound[motion][1:,:].reshape([-1,2])[:,1:]
+                
+                ext_end=np.vstack((ext_end,rext))
+                flex_str=np.vstack((flex_str,rflex))
+            
+            #sorting values
+            ext_end.sort(axis=0)
+            flex_str.sort(axis=0)
+            ext_end = ext_end[:-1,:] #popping last value
+            flex_str = flex_str[1:,:]  # popping first value
+            
+            #print(np.hstack((ext_end,flex_str)))    
+            cond = (np.logical_and(time < flex_str , time > ext_end)).any(axis=0)    
+            offset= np.vstack((self.RPY["head_rel"][:,cond].mean(axis = 1),self.RPY["head_rel"][:,cond].std(axis = 1)))
+            
+            return {"value": offset,"rng":np.hstack((ext_end,flex_str))}
+            
+        else:
+
+            mean_ang = dict()
+            for motion in self.mot:
+                flex_end = self.Tbound[motion][:1,:].reshape([-1,2])[:,1:]
+                ext_str = self.Tbound[motion][1:,:].reshape([-1,2])[:,0:1]               
+                
+                cond = (np.logical_and(time > flex_end , time < ext_str)).any(axis=0)
+                    
+                
+                RPY_select = self.RPY["head_rel"][:,cond]
+                RPY_stats = np.vstack(( RPY_select.mean(axis = 1) , RPY_select.std(axis=1)))
+                mean_ang.update({motion:{"value":RPY_stats,"rng": np.hstack((flex_end,ext_str))}})
+        return mean_ang
+        
     
     def show_DSET_map():
         pardir = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
