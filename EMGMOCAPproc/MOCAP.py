@@ -36,7 +36,7 @@ def crd2dict (file_addresses):
     
         marker_dict=dict()
     
-        used_markers= 7
+        used_markers= 10
     
         for i , marker_name in enumerate(c['parameters']['POINT']['LABELS']["value"]):           
             marker_dict.update({marker_name:point_data[0:3,i,:].T}) 
@@ -44,10 +44,13 @@ def crd2dict (file_addresses):
                 break 
 
         #Emg Data --------------------------------------------------------------
+        analog_labels=c['parameters']["ANALOG"]["LABELS"]["value"]
+        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,5)]
         analog_data = c['data']['analogs']
     
-        EMG_data = analog_data[0,:,:]
         
+        EMG_data = analog_data[0,analog_idx,:]
+        print(analog_data)
         #Sampling _frequency-----------------------------------------------------------------
         
         sfmc=c['header']['points']['frame_rate'] #Sampling frequency of MoCap
@@ -153,7 +156,7 @@ class trial_MOCAP_EMG:
         print("File {} . Make {} clicks".format(self.label,nclicks))
         #boundaries=plt.ginput(nclicks,timeout=-1)
         #boundaries=[bound[0] for bound in boundaries]
-        boundaries=AUX.get_bound(nclicks,fig,ax)
+        boundaries=AUX.get_bound(nclicks,fig,ax,seq)
         boundaries=np.array(boundaries).reshape(-1,2,2)
         for i , motion in enumerate(seq):            
             self.Tbound[motion] = np.append(self.Tbound[motion],boundaries[i,:,:],axis=1)
@@ -189,12 +192,12 @@ class trial_MOCAP_EMG:
             seq.append(set(reference).difference(seq).pop())
         return seq
     
-    def get_mean_ang(self, neutral = True):
+    def get_mean_ang(self, neutral = True, Ref="head_rel"):
         
         if self.Tbound == None:
             print ("Define limits first")
             return
-        time = np.arange(self.RPY["head_rel"].shape[1])/self.sfmc
+        time = np.arange(self.RPY[Ref].shape[1])/self.sfmc
         
         if neutral:
             flex_str= np.empty([0,1])
@@ -215,7 +218,7 @@ class trial_MOCAP_EMG:
             
             #print(np.hstack((ext_end,flex_str)))    
             cond = (np.logical_and(time < flex_str , time > ext_end)).any(axis=0)    
-            offset= np.vstack((self.RPY["head_rel"][:,cond].mean(axis = 1),self.RPY["head_rel"][:,cond].std(axis = 1)))
+            offset= np.vstack((self.RPY[Ref][:,cond].mean(axis = 1),self.RPY[Ref][:,cond].std(axis = 1)))
             
             return {"value": offset,"rng":np.hstack((ext_end,flex_str))}
             
@@ -229,7 +232,7 @@ class trial_MOCAP_EMG:
                 cond = (np.logical_and(time > flex_end , time < ext_str)).any(axis=0)
                     
                 
-                RPY_select = self.RPY["head_rel"][:,cond]
+                RPY_select = self.RPY[Ref][:,cond]
                 RPY_stats = np.vstack(( RPY_select.mean(axis = 1) , RPY_select.std(axis=1)))
                 mean_ang.update({motion:{"value":RPY_stats,"rng": np.hstack((flex_end,ext_str))}})
         return mean_ang
