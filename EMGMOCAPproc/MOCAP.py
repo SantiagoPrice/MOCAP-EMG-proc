@@ -36,10 +36,11 @@ def crd2dict (file_addresses):
     
         marker_dict=dict()
     
-        used_markers= 10
+        used_markers= 15
     
-        for i , marker_name in enumerate(c['parameters']['POINT']['LABELS']["value"]):           
-            marker_dict.update({marker_name:point_data[0:3,i,:].T}) 
+        for i , marker_name in enumerate(c['parameters']['POINT']['LABELS']["value"]):
+            mrk_name_wo_sub = marker_name.split(":")[-1]
+            marker_dict.update({mrk_name_wo_sub: point_data[0:3,i,:].T}) 
             if i == used_markers:
                 break 
 
@@ -50,7 +51,7 @@ def crd2dict (file_addresses):
     
         
         EMG_data = analog_data[0,analog_idx,:]
-        print(analog_data)
+        #print(analog_data)
         #Sampling _frequency-----------------------------------------------------------------
         
         sfmc=c['header']['points']['frame_rate'] #Sampling frequency of MoCap
@@ -60,9 +61,11 @@ def crd2dict (file_addresses):
         c3ds.append({'MOCAP':marker_dict, 'EMG':EMG_data ,"SFMC": sfmc , "SFEMG": sfemg})
     
     c3dfin=c3ds.pop(0)
+    
+    #print(c3dfin["MOCAP"].keys())
     for C3D in c3ds:
-        c3dfin["MOCAP"]=np.append(c3dfin["MOCAP"],c3dfin["MOCAP"],axis=0)
-        c3dfin["EMG"]=np.append(c3dfin["EMG"],c3dfin["EMG"],axis=1)
+        c3dfin["MOCAP"]=np.append(c3dfin["MOCAP"],C3D["MOCAP"],axis=0)
+        c3dfin["EMG"]=np.append(c3dfin["EMG"],C3D["EMG"],axis=1)
     return c3dfin
 
 # =============================================================================
@@ -107,9 +110,10 @@ class trial_MOCAP_EMG:
         #Head_orient = Head_orient         
         #Should_orient = np.full(Should_orient.shape,quaternion.quaternion(1,0,0,0))
             
-        headYPR_abs = getYPR(Head_orient)
-        bodyYPR_abs = getYPR(Should_orient)
-        headYPR_rel = getYPR(Head_orient * Should_orient.conjugate())
+        headYPR_abs = getYPR(Head_orient*Head_orient[0].conjugate())
+        bodyYPR_abs = getYPR(Should_orient[0].conjugate()*Should_orient)
+        
+        headYPR_rel = getYPR((Head_orient*Should_orient.conjugate())*(Head_orient[0]*Should_orient[0].conjugate()).conjugate())
         
         self.q = {"head":Head_orient , "body": Should_orient}
         self.RPY = {"head_abs" : np.array(headYPR_abs) , "body_abs": np.array(bodyYPR_abs) , "head_rel" : np.array(headYPR_rel)}
@@ -273,7 +277,7 @@ def get_orient(Markers,globalFrame,MrkConf):
      Orient= quaternion.from_rotation_matrix(Orient) # array of quaternions [samples, Qdim]
      
      
-     Orient=Orient * Orient[0].conjugate(); # Referering the head frames to the initial frame
+     #Orient=Orient * Orient[0].conjugate(); # Referering the head frames to the initial frame
      # Observation: because the variable frame is a numpy array it allow broadcasting with element wise products. Element-wise operations are ufunc with this property. 
      # Broadcasting rules: https://numpy.org/doc/stable/user/basics.broadcasting.html#general-broadcasting-rules
      
@@ -282,7 +286,9 @@ def get_orient(Markers,globalFrame,MrkConf):
      return Orient
      
 
-getYPR = np.vectorize(lambda q: yawPitchRoll(q,ls=False),otypes=["f"]*3) 
+getYPR = np.vectorize(lambda q: yawPitchRoll(q,ls=False),otypes=["f"]*3)
+
+
 
 def yawPitchRoll(q, ls = False):
     """Function that converts quaternion to the yaw pitch roll representation
@@ -301,6 +307,76 @@ def yawPitchRoll(q, ls = False):
             arr = ((np.array((yaw , pitch , roll),dtype = 'float64')+np.pi)%(2*np.pi)-np.pi) * 180/np.pi
             return arr [0] , arr[1] , arr[2]
 
+def swng_swch_dec(q,v):
+    """Function that decompose quaternion into the swing-twist represantation (swing happens first) 
+    Input: 
+        .q: quaternion
+        .v: base vector. I think it is the swing axis.
+    Output:
+        qs , qt : the quaternion for the swing and twist representation"""
+    if np.linalg.norm(v)==0:
+        raise TypeError("Null base vector for swing-switch representation ")
+    q2spin = lambda  q: np.array((q.w,q.x,q.y,q.z)) 
+    spin2q = lambda sp: quaternion.quaternion(sp.w,sp)
+    
+    x,y,z=v
+    u=np.dot(q.vec,v)
+    n=np.linalg.norm(v)
+    m=q.w*n
+    l=(m**2+u**2*n)**0.5
+    qt=quaternion.quaternion(m/l,z*u/l,x*u/l,y*u/l)
+    qs=q/qt
+    return  qs ,qt
 
+def swng_swch_dec_spn(q,v):
+    """(NOT WORKING YET)Function that decompose quaternion into the swing-twist represantation (swing happens first) 
+    Input: 
+        .q: quaternion
+        .v: base vector. I think it is the swing axis.
+    Output:
+        qs , qt : the quaternion for the swing and twist representation
+    NOTE"""
+    raise TypeError("FIX spinor issue")
+    if np.linalg.norm(v)==0:
+        raise TypeError("Null base vector for swing-switch representation ")
+    q2spin = lambda  q: np.array((q.w,q.x,q.y,q.z)) 
+    spin2q = lambda sp: quaternion.quaternion(sp.w,sp)
+    
+    x,y,z=v
+    u=np.dot(q.vec,v)
+    n=np.linalg.norm(v)
+    m=q.w*n
+    l=(m**2+u**2*n)**0.5
+    qt=quaternion.quaternion(m/l,z*u/l,x*u/l,y*u/l)
+    qs=q/qt
+    return  qs ,qt
 
+def swng_swch_dec_drct(q,v):
+    """(NOT WORKING YET)Function that decompose quaternion into the twist after swing representation
+    Input: 
+        .q: quaternion
+        .v: base vector. It is a generic vector that is normal to the sTring axis
+        For verification: v=qs**-1*qt.vec*qs is the twist vector in the global frame
+    Output:
+        qs , qt : the quaternion for the swing and twist representation
+    NOTE"""
+    if np.linalg.norm(v)==0:
+        raise TypeError("Null base vector for swing-switch representation ")
+    qv=quaternion.from_vector_part(v) 
+    
 
+    w = (q*qv*1/q).vec
+    n = np.cross(v,w)
+    
+    n/=np.linalg.norm(n)
+    print(n)
+    ca=np.dot(v,w)/np.linalg.norm(v)/np.linalg.norm(w)
+    a=np.arccos(ca)
+    ca2=np.cos(a/2)
+    sa2=np.sin(a/2)
+    
+    qs=quaternion.quaternion(ca2,*(sa2*n))
+    
+    qt=q/qs
+    
+    return  qs ,qt

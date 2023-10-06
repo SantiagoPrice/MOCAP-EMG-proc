@@ -67,12 +67,14 @@ def axis_form_square_arrangement_head(Markers):
                 Example: RefLocal[i,:,:]=[[ux,uy,uz],[vx,vy,vz],[wx,wy,wz]]
      """    
      u = (Markers['frontl'] - Markers['backl'])+(Markers['frontr'] - Markers['backr'])
+     #u=(Markers['frontl'] - Markers['frontr'])+(Markers['backl'] - Markers['backr'])
      unorm = np.linalg.norm(u,axis=1).reshape(-1,1)
      u = u / unorm;
      
      
      
      v = (Markers['frontl'] - Markers['frontr'])+(Markers['backl'] - Markers['backr'])
+     #v= (Markers['frontl'] - Markers['backl'])+(Markers['frontr'] - Markers['backr'])
      proj = np.sum(v*u,axis=1).reshape(-1,1);         #projection of v in u or viceversa
      v = (v- proj * u);                 # removing V component in the u direction
      vnorm = np.linalg.norm(v,axis=1).reshape(-1,1)
@@ -89,7 +91,7 @@ def axis_form_square_arrangement_head(Markers):
      v=v.reshape(-1,1,3) 
      w=w.reshape(-1,1,3)      
      RefLocal= np.hstack((u,v,w));               # Transformation matrix array [samples , xyz glob(3) , xyz loc(3), ]
-     RefLocal= np.swapaxes(RefLocal,1,2)
+     #RefLocal= np.swapaxes(RefLocal,1,2)
      return RefLocal
  
 
@@ -217,12 +219,12 @@ def axis_form_square_arrangement_back (Markers):
      """    
      w = (Markers['SupL'] - Markers['InfL'])+(Markers['SupR'] - Markers['InfR'])
      wnorm = np.linalg.norm(w,axis=1).reshape(-1,1)
-     w = -w / wnorm;
+     w = w / wnorm;
      
      
      
      v = (Markers['SupL'] - Markers['SupR'])+(Markers['InfL'] - Markers['InfR'])
-     proj = np.sum(v*w,axis=1).reshape(-1,1);         #projection of v in u or viceversa
+     proj = np.sum(v*w,axis=1).reshape(-1,1);         #projection of v in w or viceversa
      v = (v- proj * w);                 # removing V component in the u direction
      vnorm = np.linalg.norm(v,axis=1).reshape(-1,1)
      v = v / vnorm;
@@ -238,7 +240,7 @@ def axis_form_square_arrangement_back (Markers):
      v=v.reshape(-1,1,3) 
      w=w.reshape(-1,1,3)      
      RefLocal= np.hstack((u,v,w));               # Transformation matrix array [samples , xyz glob(3) , xyz loc(3), ]
-     RefLocal= np.swapaxes(RefLocal,1,2)
+     #RefLocal= np.swapaxes(RefLocal,1,2)
      return RefLocal
  
     
@@ -279,4 +281,42 @@ def axis_form_L_arrangement_back_inv(Markers):
       RefLocal= np.swapaxes(RefLocal,1,2)
       return RefLocal
     
- 
+def axis_form_L_arrangement_back(Markers):
+      """
+      This function makes an ortonormal base from from three markers arrangement
+      Input:
+          .Markers: struct with the fields: SupL, Supr, InfR, InfR 
+          Each field is a [sample x 3] matrix with each marker temporal evolution
+
+         . Output:
+             RefLocal: framework uvw of the body over time.[frames x 3 x 3] Matrix
+                 Example: RefLocal[i,:,:]=[[ux,uy,uz],[vx,vy,vz],[wx,wy,wz]]
+      """    
+      w = (Markers['SupL'] - Markers['InfL'])
+      wnorm = np.linalg.norm(w,axis=1).reshape(-1,1)
+      w = -w / wnorm;
+      
+      
+      
+      v = (Markers['SupL'] - Markers['SupR'])
+      proj = np.sum(v*w,axis=1).reshape(-1,1);         #projection of v in u or viceversa
+      v = (v- proj * w);                 # removing V component in the u direction
+      vnorm = np.linalg.norm(v,axis=1).reshape(-1,1)
+      v = v / vnorm;
+      
+      
+      
+      u = np.cross(v,w);
+      unorm = np.linalg.norm(u,axis=1).reshape(-1,1)
+      u = u / unorm; 
+      
+      
+      u=u.reshape(-1,1,3) 
+      v=v.reshape(-1,1,3) 
+      w=w.reshape(-1,1,3)      
+      RefLocal= np.hstack((u,v,w));               # Transformation matrix array [samples , xyz glob(3) , xyz loc(3), ]
+      #RefLocal= np.swapaxes(RefLocal,1,2)
+      return RefLocal 
+  
+def YPR_from_mrks():
+    pass
