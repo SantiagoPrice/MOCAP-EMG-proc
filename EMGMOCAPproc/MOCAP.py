@@ -46,7 +46,7 @@ def crd2dict (file_addresses):
 
         #Emg Data --------------------------------------------------------------
         analog_labels=c['parameters']["ANALOG"]["LABELS"]["value"]
-        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,5)]
+        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,7)]
         analog_data = c['data']['analogs']
     
         
@@ -99,13 +99,19 @@ class trial_MOCAP_EMG:
         
         s = crd2dict (c3ds)
         
-        HeadTraj = {'frontl' : s['MOCAP']['hlf'] , 'backl' : s['MOCAP']['hlb'] , 'frontr': s['MOCAP']['hrf'] , 'backr': s['MOCAP']['hrb']}; 
-        ShouldTraj = {'SupL': s['MOCAP']['dlt'] , 'SupR': s['MOCAP']['drt'] , 'InfL' : s['MOCAP']['dlb'] , 'InfR': s['MOCAP']['drb']}; 
+        
+        # HeadTraj = {'frontl' : s['MOCAP']['hlf'] , 'backl' : s['MOCAP']['hlb'] , 'frontr': s['MOCAP']['hrf'] , 'backr': s['MOCAP']['hrb']}; 
+        # ShouldTraj = {'SupL': s['MOCAP']['dlt'] , 'SupR': s['MOCAP']['drt'] , 'InfL' : s['MOCAP']['dlb'] , 'InfR': s['MOCAP']['drb']}; 
+        
         
         globalFrame = np.eye(3); 
         
-        Should_orient = get_orient(ShouldTraj , globalFrame , smrks);
-        Head_orient  = get_orient(HeadTraj , globalFrame , hmrks);
+        # Should_orient = get_orient(ShouldTraj , globalFrame , smrks);
+        # Head_orient  = get_orient(HeadTraj , globalFrame , hmrks);
+        
+        Should_orient = get_orient(s['MOCAP'], globalFrame , smrks);
+        Head_orient  = get_orient(s['MOCAP'], globalFrame , hmrks);
+        
                 
         #Head_orient = Head_orient         
         #Should_orient = np.full(Should_orient.shape,quaternion.quaternion(1,0,0,0))
@@ -118,12 +124,13 @@ class trial_MOCAP_EMG:
         self.q = {"head":Head_orient , "body": Should_orient}
         self.RPY = {"head_abs" : np.array(headYPR_abs) , "body_abs": np.array(bodyYPR_abs) , "head_rel" : np.array(headYPR_rel)}
         self.EMG= s["EMG"]
-        self.Mrk_samp = {"head":s['MOCAP']['hlf'],"back":s['MOCAP']['dlt']}
+        self.Mrk_samp=dict()
+        #self.Mrk_samp = {"head":s['MOCAP']['hlf'],"back":s['MOCAP']['dlt']}
         self.markers= s['MOCAP']
         self.sfmc = s["SFMC"]
         self.sfemg = s ["SFEMG"]
         
-    def set_boundaries(self , seq):
+    def set_boundaries(self , seq,t_phases=np.empty((0,1))):
         """
         This function ask for manually indicate the boundary points of the flexion
         and extension of the motion sequence. Such a data is stored in the dictionary.
@@ -160,7 +167,16 @@ class trial_MOCAP_EMG:
         print("File {} . Make {} clicks".format(self.label,nclicks))
         #boundaries=plt.ginput(nclicks,timeout=-1)
         #boundaries=[bound[0] for bound in boundaries]
-        boundaries=AUX.get_bound(nclicks,fig,ax,seq)
+        if len(t_phases):
+            #t_phases=t_phases[0]
+            time_phases=np.cumsum(t_phases,axis=-1) 
+            print(time_phases)
+            phase_strt=(np.arange(len(seq))*time_phases[0,-1]).reshape(-1,1)
+            time_phase_rel=np.hstack((np.zeros((1,1)),time_phases[:,:-1]))
+            boundaries=(phase_strt+(time_phase_rel)).flatten()
+        else:
+            boundaries=AUX.get_bound(nclicks,fig,ax,seq)
+            
         boundaries=np.array(boundaries).reshape(-1,2,2)
         for i , motion in enumerate(seq):            
             self.Tbound[motion] = np.append(self.Tbound[motion],boundaries[i,:,:],axis=1)
@@ -188,16 +204,25 @@ class trial_MOCAP_EMG:
         seq=[]
         while probe < target.shape[0]:
             ang_probe = target[probe,:]
+            
             index = np.argmin(-abs(ang_probe))
+            if abs(int(ang_probe[index]*180/np.pi)) == 30:
+                ang_probe[index]=np.sign(ang_probe[index])*29*np.pi/180
             motion = motions [index] 
             seq.append(f"{motion}{int(ang_probe[index]*180/np.pi)}")
             probe += stride
+        print(len(seq))
         if len(seq) == 11: 
+            print(set(reference).difference(seq))
             seq.append(set(reference).difference(seq).pop())
         return seq
     
     def get_mean_ang(self, neutral = True, Ref="head_rel"):
-        
+        """ Returns mean angle in the roll yaw pich decomposition on a given range:
+            Neutral TRUE -> Range is out of the displacement period
+            Neutral FALSE -> Range is during the holding phase
+            """
+            
         if self.Tbound == None:
             print ("Define limits first")
             return
