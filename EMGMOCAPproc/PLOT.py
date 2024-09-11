@@ -1664,7 +1664,6 @@ def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manu
     cond_lb = ['LS1', 'LS2', 'MS1', 'MS2', 'HS1', 'HS2']
     jcond_lb= ['F','LS', 'MS', 'HS']
     
-    #means=dict() # Container with means EMG values of each INVOLVED participant
     stds=dict() # Container with stds EMG values of each INVOLVED participant
 
     print("Note: intermediate stiffness is not being processed")
@@ -1691,93 +1690,30 @@ def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manu
     stds=np.zeros((Ncond,Nmot,Nparts,nMusc))
     
     
-    # means_t=np.zeros((Ncond*2,Nmot,Nparts,nMusc))
-    # stds_t=np.zeros((Ncond*2,Nmot,Nparts,nMusc))
-    #means=np.empty((0,len(motions)))
-    #stds=np.empty((0,len(motions)))
     for m_n , muscle in enumerate(muscles):
             print(muscle)
-            #print(f"Processsing {muscle}")
         
             act_part=[] #list with the active participants
             act_part_lab=[] #label list with the active participants
-            for  part_lab, part_conds in parts.items():
+            
+            for  part_lab, part in parts.items():
    
-              #Filtering participants
-                    
+              #Filtering participant
                 if part_lab=="P 1":# or part_lab=="P 7" or part_lab=="P 2" or part_lab=="P 5"or part_lab=="P 2" 
                      #continue
                      pass
-                chans=channels
                     
                 # Making Active participant list
                 npa=int(part_lab[-2:])-1
                 act_part.append(npa)
-                act_part_lab.append(part_lab)
+                act_part_lab.append(part_lab)               
+                          
                 
-                # Removing baselines from the last participants
-                
-                # if len(part_conds)==8:
-                #     pcs= part_conds[2:]
-                # else:
-                #     pcs=part_conds
-                    
-                pcs=part_conds
-                #EMG nomalication values
-                
-                
-                if Norm =="manual":
-                    max_EMG_abs=np.array([1,1,1,1])
-                elif Norm =="Abs_peak":
-                    max_EMG_val_ind=np.array([EMG.max_EMG(part_conds[-i],channels=chans) for i in range(1,3)])
-                
-                    max_EMG_val=max_EMG_val_ind[:,0,:]
-                    max_EMG_ind=max_EMG_val_ind[:,1,:]
-                    max_EMG_abs=max_EMG_val.max(axis=0)
-                
-                elif Norm =="MVC":
-                    mov=["F","E"]
-                    MEMG_means=np.zeros((2,nMusc))
-                    for n_m , m in enumerate(mov):
-                        file_address=os.path.join(".\\normEMG",f"{part_lab}_MVC_{m}.c3d")
-                        c = c3d(file_address)
-                    
-    
-                    
-                        marker_dict=dict()
-    
-                        #Emg Data --------------------------------------------------------------
-                        analog_labels=c['parameters']["ANALOG"]["LABELS"]["value"]
-                        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,1+nMusc)]
-                        analog_data = c['data']['analogs']
-                        MEMG_raw= analog_data[0,analog_idx,:]
-                        
-                        sfemg=c['header']['analogs']['frame_rate'] #Sampling frequency of EMG
-                        MEMG_f=EMG.EMG_filt3(MEMG_raw,sfemg)
-                        MEMG_means[n_m]=MEMG_f.mean(axis = 1)
-                    max_EMG_abs=MEMG_means.max(axis=0)
-                    
-                    
-                else:
-                    # example: r;full_cicle;max
-                    rphase=Norm.split(";")[-2]
-                    rmet=Norm.split(";")[-1]
-                    ref_EMG=[]
-                    for cond in pcs:
-                        abs_val=EMG.EMG_stats(cond,rphase, Norm=[None], channels=[chans[m_n]] , metric=rmet)[:,0,:]
-                        mot_ind=cond.mot.index("r15")
-                        ref_EMG.append(abs_val[mot_ind])
-                        mot_ind=cond.mot.index("r-15")
-                        ref_EMG.append(abs_val[mot_ind])
-                    max_EMG_abs = np.array(ref_EMG).max()
-                    max_EMG_abs = np.array([max_EMG_abs ] *4) # This is just  to get the same 4*1 format for the variable
-                    # check mean emg act during approaching
-                    #pick the max value
-                    pass
-                    
+                #Getting the participant normaliztion value 
+                max_EMG_abs = EMG.norm_EMG_part(part_lab,part,channels,m_n,nMusc,crit=Norm) 
 
    
-                for n_cond , cond_dat in enumerate(pcs):
+                for n_cond , cond_dat in enumerate(part):
                     
                     if n_cond == 2 or n_cond==3:   # Mid stiffness conditions are sipped
                         #continue
@@ -1789,7 +1725,7 @@ def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manu
                        #print(Norm[npa])
                     
                     # print(cond_dat.label)
-                    means_stds_1p=EMG.EMG_stats(cond_dat,phase , Norm=max_EMG_abs[[m_n]] , channels=[chans[m_n]] , metric=met)[:,0,:]
+                    means_stds_1p=EMG.EMG_stats(cond_dat,phase , Norm=max_EMG_abs[[m_n]] , channels=[channels[m_n]] , metric=met)[:,0,:]
 
                     if means_stds_1p[0].size==0:
                         print(f"{part_lab} {n_cond}")

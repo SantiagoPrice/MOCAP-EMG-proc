@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.signal import butter, filtfilt , find_peaks
+import os
 import pandas
+from ezc3d import c3d
 
 def EMG_filt(EMG_raw,Fs):  
     """
@@ -214,48 +216,7 @@ def EMG_filt5(EMG_raw,Fs):
                 # Apply the filter to the curve
                 EMG_f = filtfilt(b, a,EMG_f)
         return EMG_f
-    
-def EMG_filt6(EMG_raw,Fs):
-    """
-    Function that filter a multichannel EMG signal using a series filters in cascade THIS ONE WORKS
-
-    Parameters
-    ----------
-    EMG_raw : np.array
-        The original EMG signal
-    Fs : int
-        sampling frecuency in sample per second
-    Returns
-    -------
-    EMG_f: np.array
-         the filtered EMG signal
-
-    """
-    EMG_f=EMG_raw.copy()
-    # Define the filter parameters
-    order = 4  # Filter order
-    cutoff_freqs = [None,[15,400],None,None]  # Cutoff frequencies for filtering ---------- pb 15 w 250
-    ftypes= ["DCrem","bandpass","rectification","MAvg"] # Type of filter
-
-    if EMG_f.shape[1]==0:
-        return np.zeros((EMG_f.shape[0],1))
-    else:
-        for cutoff_freq , bt in zip(cutoff_freqs,ftypes):
-            # Design the Butterworth low-pass filter
-            if bt =="DCrem":
-                EMG_f -= EMG_f.mean(axis=1).reshape(-1,1) #DC component remotion
-            elif bt == "rectification":
-                EMG_f=abs(EMG_f)
-            elif bt == "MAvg":
-                wsize=250
-                EMG_f=moving_average(EMG_f, n=wsize)
-          
-            else:
-                b, a = butter(order, cutoff_freq, btype=bt, analog=False, output='ba',fs=Fs)
-                # Apply the filter to the curve
-                EMG_f = filtfilt(b, a,EMG_f)
-        return EMG_f
-    
+       
 def EMG_filt6(EMG_raw,Fs):
     """
     Function that filter a multichannel EMG signal using a series filters in cascade THIS ONE WORKS
@@ -397,6 +358,78 @@ def EMG_stats(trial , phase , channels=[0,8,9,10] , debug=False , Norm=[None] , 
 
         EMGs_stats_trial=np.vstack((EMGs_stats_trial,EMGs_stats_mot))
     return EMGs_stats_trial
+
+def norm_EMG_part(part_lab,trials,channels,m_n,nMusc,crit="manual"):
+    """
+    Function that return representative normalization value for the set of trials of a given participant
+
+    Parameters
+    ----------
+    part_lab : string
+        participants name
+    trials : list of trial_MOCAP_EMG objects
+        EMG/MOCAP datastructure form each trial
+    channels : int list
+        channels that are included in the analysis
+    m_n : int
+        index of the analized muscle (from 0 to nMusc-1)
+    nMusc : int
+        amount of muscle measured in the study
+    crit : string
+        DESCRIPTION. Critiria to establish the normalization value:
+            -manual: the values are normally added
+            -mvc: values comes from the maximal volumetric contration test
+            - <mot>;<phase>;<stat> the statistical value at the phase of a give motion is taken as a reference
+
+    Returns
+    -------
+    None.
+
+    """
+    if crit =="manual":
+        max_EMG_abs=np.array([1,1,1,1])
+    elif crit =="Abs_peak":
+        max_EMG_val_ind=np.array([max_EMG(trials[-i],channels) for i in range(1,3)])
+    
+        max_EMG_val=max_EMG_val_ind[:,0,:]
+        max_EMG_ind=max_EMG_val_ind[:,1,:]
+        max_EMG_abs=max_EMG_val.max(axis=0)
+    
+    elif crit =="MVC":
+        mov=["F","E"]
+        MEMG_means=np.zeros((2,nMusc))
+        for n_m , m in enumerate(mov):
+            file_address=os.path.join(".\\normEMG",f"{part_lab}_MVC_{m}.c3d")
+            c = c3d(file_address)
+
+            #Emg Data --------------------------------------------------------------
+            analog_labels=c['parameters']["ANALOG"]["LABELS"]["value"]
+            analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,1+nMusc)]
+            analog_data = c['data']['analogs']
+            MEMG_raw= analog_data[0,analog_idx,:]
+            
+            sfemg=c['header']['analogs']['frame_rate'] #Sampling frequency of EMG
+            MEMG_f=EMG_filt3(MEMG_raw,sfemg)
+            MEMG_means[n_m]=MEMG_f.mean(axis = 1)
+        max_EMG_abs=MEMG_means.max(axis=0)
+        
+        
+    else:
+        # example: r;full_cicle;max
+        rphase=crit.split(";")[-2]
+        rmet=crit.split(";")[-1]
+        ref_EMG=[]
+        for trial in trials:
+            abs_val=EMG_stats(trial,rphase, Norm=[None], channels=[channels[m_n]] , metric=rmet)[:,0,:]
+            mot_ind=trial.mot.index("r15")
+            ref_EMG.append(abs_val[mot_ind])
+            mot_ind=trial.mot.index("r-15")
+            ref_EMG.append(abs_val[mot_ind])
+        max_EMG_abs = np.array(ref_EMG).max()
+        max_EMG_abs = np.array([max_EMG_abs ] *4) # This is just  to get the same 4*1 format for the variable
+        # check mean emg act during approaching
+        #pick the max value
+    return max_EMG_abs
     
 def max_EMG(part,channels=[0,1,2,3],muscle=None):
     chan = np.array(channels, dtype=np.intp)
