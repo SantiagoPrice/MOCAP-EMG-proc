@@ -838,7 +838,7 @@ def EMG_plotmultip(parts,phase="holding",save=False,debug=False, Norm="manual", 
                     pcs=part_conds
                     
                 
-                #EMG nomalication values
+                #EMG nomalization values
                 
                 
                 if Norm =="manual":
