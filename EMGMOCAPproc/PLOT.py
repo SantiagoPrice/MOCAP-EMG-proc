@@ -122,9 +122,9 @@ def ang_stats(part_trials , ref = "head_rel", save = False ):
         ax.bar(x, means_stds[0,:], yerr=means_stds[1,:], align='center', alpha=1, width=bar_width, color=col[:len(cond)], label=cond)
         #ax.set_ylim([-6*10**-5, 6*10**-5])
     plt.grid("on")
-    if save:
-        plt.savefig(r"Plots/{} angle_stats for Head_rel.pdf".format(participant))
-        plt.close(fig)
+    # if save:
+    #     plt.savefig(r"Plots/{} angle_stats for Head_rel.pdf".format(participant))
+    #     plt.close(fig)
         
 def ANG_plotmultip(parts,save=False,debug=False, met="mean" ,style=None ,ref="head_rel"):
     Nparts= len(parts)

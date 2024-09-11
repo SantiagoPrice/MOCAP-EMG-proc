@@ -24,7 +24,23 @@ DEF_SMkrs = MRKs2REFs.axis_form_square_arrangement_back
 # Functions
 # =============================================================================
 def crd2dict (file_addresses):
-    
+    """
+    Function that convert the C3D file into a dictionary with only the relevant data
+
+    Parameters
+    ----------
+    file_addresses : list of C3D files local addresses 
+
+    Returns
+    -------
+    c3dfin : MOCAP-EMG data as a dictionary with the following structure
+            MOCAP: Dictionary with labeled marger data as [3,NSamp] matrices
+            EMG: EMG data as a [NChannel,NSamp] matrix
+            sfmc: MOCAP sampling freq
+            sfemg EMG sampling freq
+            
+
+    """
     c3ds=[]
     for file_address in file_addresses:
         
@@ -46,7 +62,7 @@ def crd2dict (file_addresses):
 
         #Emg Data --------------------------------------------------------------
         analog_labels=c['parameters']["ANALOG"]["LABELS"]["value"]
-        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,7)]
+        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,7)] #getting the first 7 channels, they can be disorganized
         analog_data = c['data']['analogs']
     
         
@@ -106,23 +122,23 @@ class trial_MOCAP_EMG:
         
         globalFrame = np.eye(3); 
         
-        # Should_orient = get_orient(ShouldTraj , globalFrame , smrks);
-        # Head_orient  = get_orient(HeadTraj , globalFrame , hmrks);
+        # qTrunk = mrks2q(ShouldTraj , globalFrame , smrks);
+        # qHead  = mrks2q(HeadTraj , globalFrame , hmrks);
         
-        Should_orient = get_orient(s['MOCAP'], globalFrame , smrks);
-        Head_orient  = get_orient(s['MOCAP'], globalFrame , hmrks);
+        qTrunk = mrks2q(s['MOCAP'], globalFrame , smrks);
+        qHead  = mrks2q(s['MOCAP'], globalFrame , hmrks);
         
                 
-        #Head_orient = Head_orient         
-        #Should_orient = np.full(Should_orient.shape,quaternion.quaternion(1,0,0,0))
+        #qHead = qHead         
+        #qTrunk = np.full(qTrunk.shape,quaternion.quaternion(1,0,0,0))
             
-        headYPR_abs = getYPR(Head_orient*Head_orient[0].conjugate())
-        bodyYPR_abs = getYPR(Should_orient[0].conjugate()*Should_orient)
+        yprHead = q2ypr(qHead*qHead[0].conjugate())
+        yprTrunk= q2ypr(qTrunk[0].conjugate()*qTrunk)
         
-        headYPR_rel = getYPR((Head_orient*Should_orient.conjugate())*(Head_orient[0]*Should_orient[0].conjugate()).conjugate())
+        yprHeadTrunk = q2ypr((qHead*qTrunk.conjugate())*(qHead[0]*qTrunk[0].conjugate()).conjugate())
         
-        self.q = {"head":Head_orient , "body": Should_orient}
-        self.RPY = {"head_abs" : np.array(headYPR_abs) , "body_abs": np.array(bodyYPR_abs) , "head_rel" : np.array(headYPR_rel)}
+        self.q = {"head":qHead , "body": qTrunk}
+        self.RPY = {"head_abs" : np.array(yprHead) , "body_abs": np.array(yprTrunk) , "head_rel" : np.array(yprHeadTrunk)}
         self.EMG= s["EMG"]
         self.Mrk_samp=dict()
         #self.Mrk_samp = {"head":s['MOCAP']['hlf'],"back":s['MOCAP']['dlt']}
@@ -281,7 +297,7 @@ class trial_MOCAP_EMG:
          return f"{self.label}"
      
 
-def get_orient(Markers,globalFrame,MrkConf):
+def mrks2q(Markers,globalFrame,MrkConf):
      """
      This function returns the quaternion of a given body with a set of attached markers
      Input:
@@ -311,7 +327,7 @@ def get_orient(Markers,globalFrame,MrkConf):
      return Orient
      
 
-getYPR = np.vectorize(lambda q: yawPitchRoll(q,ls=False),otypes=["f"]*3)
+q2ypr = np.vectorize(lambda q: yawPitchRoll(q,ls=False),otypes=["f"]*3)
 
 
 
