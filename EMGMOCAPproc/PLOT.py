@@ -170,7 +170,7 @@ def ANG_plotmultip(parts,save=False,debug=False, met="mean" ,style=None ,ref="he
     for  part_lab, part_conds in parts.items():
       
         print(part_lab)    
-        if part_lab=="P 1" or part_lab=="P 2"or part_lab=="P 10" or part_lab=="P 8":#  or part_lab=="P 5"  or part_lab=="P 7"
+        if part_lab=="P 1" or part_lab=="P 10" or part_lab=="P 8":#  or part_lab=="P 5"  or part_lab=="P 7"
              continue
        
         
@@ -562,7 +562,7 @@ def EMG_plot1p(part_conds,phase="full_cicle",save=False,debug=False, chans=[0,8,
             #max_EMG_abs=np.ones(max_EMG_abs.shape)
             for n_cond , cond_dat in enumerate(part_conds):
                 
-                means_stds=EMG.EMG_stats(cond_dat,phase,Norm=max_EMG_abs[[m_n]],channels=[chans[m_n]])[:,0,:]
+                means_stds=EMG.mot_stats(cond_dat,phase,Norm=max_EMG_abs[[m_n]],channels=[chans[m_n]])[:,0,:]
                 
                 
                 for nm_loc, m in enumerate(cond_dat.mot):
@@ -677,7 +677,7 @@ def EMG_plot1p_EMBC(part_conds,phase="full_cicle",save=False,debug=False, chans=
             # max_EMG_abs=np.ones(max_EMG_abs.shape)
             for n_cond , cond_dat in enumerate(part_conds):
                 
-                means_stds=EMG.EMG_stats(cond_dat,phase,Norm=[None],channels=[chans[m_n]])[:,0,:]
+                means_stds=EMG.mot_stats(cond_dat,phase,Norm=[None],channels=[chans[m_n]])[:,0,:]
                 
                 
                 for nm_loc, m in enumerate(cond_dat.mot):
@@ -887,7 +887,7 @@ def EMG_plotmultip(parts,phase="holding",save=False,debug=False, Norm="manual", 
                     ref_EMG=[]
                     for cond in pcs:
                         ang = max([int(s[1:]) for s in cond.mot if s.startswith(mtype)])
-                        abs_val=EMG.EMG_stats(cond,rphase, Norm=[None], channels=[chans[m_n]] , metric=rmet)[:,0,:]
+                        abs_val=EMG.mot_stats(cond,rphase, Norm=[None], channels=[chans[m_n]] , metric=rmet)[:,0,:]
                         #mot_ind=cond.mot.index("r29")
                         mot_ind=cond.mot.index(mtype+str(ang))
                         ref_EMG.append(abs_val[mot_ind])
@@ -914,7 +914,7 @@ def EMG_plotmultip(parts,phase="holding",save=False,debug=False, Norm="manual", 
                        #print(Norm[npa])
                     
                     # print(cond_dat.label)
-                    means_stds_1p=EMG.EMG_stats(cond_dat,phase , Norm=max_EMG_abs[[m_n]] , channels=[chans[m_n]] , metric=met)[:,0,:]
+                    means_stds_1p=EMG.mot_stats(cond_dat,phase , Norm=max_EMG_abs[[m_n]] , channels=[chans[m_n]] , metric=met)[:,0,:]
 
                     if means_stds_1p[0].size==0:
                         print(f"{part_lab} {n_cond}")
@@ -1652,7 +1652,7 @@ def EMG_plotmultip(parts,phase="holding",save=False,debug=False, Norm="manual", 
                 plt.savefig(r"./Plots/9302023/EMG_{}_{} group {} phase.pdf".format(met,style,phase))
 
 
-def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manual", channels=[0,1,2,3], met="mean" ,style=None , mGroup=None):
+def EMG_group_EMBC(parts,phase="holding",save=False,debug=False, Norm="manual", channels=[0,1,2,3], met="mean" ,style=None , mGroup=None):
     muscles = ['(R) Sternocleidomastoid', '(L) Sternocleidomastoid','(R) Para spinal','(L) Para spinal']
     muscles = ['right STR', 'left STR','right SPL','left SPL']
     Nparts= 7
@@ -1662,19 +1662,8 @@ def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manu
     Nmot= len(motions)
     nMusc= len(muscles)
     cond_lb = ['LS1', 'LS2', 'MS1', 'MS2', 'HS1', 'HS2']
-    jcond_lb= ['F','LS', 'MS', 'HS']
-    
-    stds=dict() # Container with stds EMG values of each INVOLVED participant
-
-    print("Note: intermediate stiffness is not being processed")
-    
-    print(motions)
-    custNorm={}
-    
-    exc_part=[]
-    
-    
-    
+    jcond_lb= ['F','LS', 'MS', 'HS']   
+          
     
     mot_types={"axial rotation":"r" , "sagital flexion":"s"}
     figs=[] #Figure container
@@ -1710,51 +1699,32 @@ def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manu
                           
                 
                 #Getting the participant normaliztion value 
-                max_EMG_abs = EMG.norm_EMG_part(part_lab,part,channels,m_n,nMusc,crit=Norm) 
+                EMG_norm = EMG.norm_part(part_lab,part,channels,m_n,nMusc,crit=Norm) 
 
    
                 for n_cond , cond_dat in enumerate(part):
-                    
-                    if n_cond == 2 or n_cond==3:   # Mid stiffness conditions are sipped
-                        #continue
-                        pass
-                    if part_lab == "P 2":
-                        pass
-                       #print(part_lab + cond_lb[n_cond])
-                       #print(n_cond)
-                       #print(Norm[npa])
-                    
-                    # print(cond_dat.label)
-                    means_stds_1p=EMG.EMG_stats(cond_dat,phase , Norm=max_EMG_abs[[m_n]] , channels=[channels[m_n]] , metric=met)[:,0,:]
+                
+                    means_stds_1p=EMG.mot_stats(cond_dat,phase , Norm=EMG_norm[[m_n]] , channels=[channels[m_n]] , metric=met)[:,0,:]
 
                     if means_stds_1p[0].size==0:
-                        print(f"{part_lab} {n_cond}")
+                        print(f"{part_lab} {n_cond} is empty")
                     
+                    # Adding participact statistics to the experiment group
                     for nm_loc, m in enumerate(cond_dat.mot):
                         nm_glb=motions.index(m)
                         means[n_cond,nm_glb,npa,m_n] = means_stds_1p[nm_loc,0]
-                    
-                        
                         stds[n_cond,nm_glb,npa,m_n] = means_stds_1p[nm_loc,1]  #Not being used
+                                              
                         
-                        
-            print("Normalization")
-            print(part_lab)
-            print(max_EMG_abs)
-                
-            if debug:
-                continue
-
-
-            
-            
             if m_n == 0:    
                 exc_part=set([f"P {i+1}" for i in range(Nparts)]) ^ set(act_part_lab) 
-    #Getting the mean from each pair of identical conditions
+                
+    #Removing statistic values form the excluded participants
     means=means[:,:,act_part,:]
     stds=stds[:,:,act_part,:]
-    # Grouping muscle activities
     
+    
+    # Grouping muscle activities
     if mGroup==None:
         EMG_avg=means
         EMG_std=stds
@@ -1813,17 +1783,8 @@ def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manu
     for muscN,muscName in enumerate(muscles):
         print("_"*60)
         print(muscName)
-        #Running statitistical tests 
-        #pGroups=EMG_avg[np.arange(3)!=1,:,:,muscN]
+
         pGroups=EMG_avg[:,:,:,muscN]
-        #print(pGroups)
-       
-        #print(act_part_lab)
-        
-        
-            
-        
-        #pTest=scipy.stats.friedmanchisquare(list(pVals[0]),list(pVals[1]),list(pVals[2]))
         
         # Visualizing the data 
         if style==None:
@@ -2321,7 +2282,6 @@ def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manu
                          #     barplot_annotate_brackets(0, 1, pv2.pvalue , np.arange(1,3) , heights,ax)
         elif style=="box_cont_ipsi":
                 #Combine this with the minimal configuration
-                #angs=ANG_plotmultip(parts,ref="head_rel",style="table")
                 cond_sset=[0,1,2,3] #excluding MS    The order affect the statistical result
                 col=["white","lightgray","darkgray","dimgray"]
                 patches= [Patch(facecolor=cl , label=cnd ,edgecolor="black") for cl , cnd in zip(col,["Baseline","Low Stiffness","Middle Stiffness","High Stiffness"])]
@@ -2329,25 +2289,18 @@ def EMG_plotmultip_EMBC(parts,phase="holding",save=False,debug=False, Norm="manu
                 cond_sset=[0,1,3] #excluding MS    The order affect the statistical result
 
                 
-                side=muscles
-                #[f"Right Rot\n(15 deg)" , f"Left Rot\n(15 deg)"]
-                
+                side=muscles              
                 fig=plt.figure(f"EMG_{met}_{style} group: {phase} phase {Norm} normalization grouping {mGroup}("+",".join(exc_part)+" are excluded)")
                 
                 if muscN == 0:
                     fig.suptitle(f"EMG_{met}_{style} group: {phase} phase("+",".join(exc_part)+" are excluded)",fontsize = "xx-large")
-                    #fig.tight_layout(pad=3, w_pad=0.5, h_pad=0.50) 
+
                     figs.append(fig)
                     ax = fig.add_subplot()
-                   
-                
-                
-                #ax = fig.add_subplot(len(muscles),len(mots),(muscN*len(mots)+mt_ind+1))
-                
-                #ax.set_title(muscName + " " + mt,fontsize = "xx-large")
+
                                 
                 #Formating 
-                # ticklabs= [jcond_lb[ind]+"\n"+r" ({}".format(angs[mt_key][mt_ind][ind][0])+"$^{\circ}\pm$"+"{}".format(angs[mt_key][mt_ind][ind][1])+"$^{\circ}$)"for ind in [0,-1]]
+              
                 ticklabs= [jcond_lb[i] for i in cond_sset]
                 fsx=30
                 is_top=False

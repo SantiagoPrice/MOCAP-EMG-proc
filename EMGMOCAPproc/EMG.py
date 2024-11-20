@@ -258,7 +258,7 @@ def EMG_filt6(EMG_raw,Fs):
                 EMG_f = filtfilt(b, a,EMG_f)
         return EMG_f
     
-def EMG_stats(trial , phase , channels=[0,8,9,10] , debug=False , Norm=[None] , metric="mean"):     
+def mot_stats(trial , phase , channels=[0,8,9,10] , debug=False , Norm=[None] , metric="mean"):     
     """ 
     Function that get the EMG statistical value for a given phase in every labeled movement in the trial
     Parameters
@@ -359,7 +359,7 @@ def EMG_stats(trial , phase , channels=[0,8,9,10] , debug=False , Norm=[None] , 
         EMGs_stats_trial=np.vstack((EMGs_stats_trial,EMGs_stats_mot))
     return EMGs_stats_trial
 
-def norm_EMG_part(part_lab,trials,channels,m_n,nMusc,crit="manual"):
+def norm_part(part_lab,trials,channels,m_n,nMusc,crit="manual"):
     """
     Function that return representative normalization value for the set of trials of a given participant
 
@@ -420,7 +420,7 @@ def norm_EMG_part(part_lab,trials,channels,m_n,nMusc,crit="manual"):
         rmet=crit.split(";")[-1]
         ref_EMG=[]
         for trial in trials:
-            abs_val=EMG_stats(trial,rphase, Norm=[None], channels=[channels[m_n]] , metric=rmet)[:,0,:]
+            abs_val=mot_stats(trial,rphase, Norm=[None], channels=[channels[m_n]] , metric=rmet)[:,0,:]
             mot_ind=trial.mot.index("r15")
             ref_EMG.append(abs_val[mot_ind])
             mot_ind=trial.mot.index("r-15")
