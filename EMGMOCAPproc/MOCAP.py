@@ -23,7 +23,7 @@ DEF_SMkrs = MRKs2REFs.axis_form_square_arrangement_back
 # =============================================================================
 # Functions
 # =============================================================================
-def crd2dict (file_addresses):
+def crd2dict (file_addresses,n_mark= 15,n_chan=7):
     """
     Function that convert the C3D file into a dictionary with only the relevant data
 
@@ -42,6 +42,7 @@ def crd2dict (file_addresses):
 
     """
     c3ds=[]
+    print(file_addresses)
     for file_address in file_addresses:
         
         print("File {} is being processed".format(os.path.split(file_address)[-1]))
@@ -52,17 +53,15 @@ def crd2dict (file_addresses):
     
         marker_dict=dict()
     
-        used_markers= 15
-    
         for i , marker_name in enumerate(c['parameters']['POINT']['LABELS']["value"]):
-            mrk_name_wo_sub = marker_name.split(":")[-1]
-            marker_dict.update({mrk_name_wo_sub: point_data[0:3,i,:].T}) 
-            if i == used_markers:
+            #mrk_name_wo_sub = marker_name.split(":")[-1]
+            marker_dict.update({marker_name: point_data[0:3,i,:].T}) 
+            if i == n_mark:
                 break 
 
         #Emg Data --------------------------------------------------------------
         analog_labels=c['parameters']["ANALOG"]["LABELS"]["value"]
-        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,7)] #getting the first 7 channels, they can be disorganized
+        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,n_chan)] #getting the first 7 channels, they can be disorganized
         analog_data = c['data']['analogs']
     
         
@@ -91,54 +90,58 @@ def crd2dict (file_addresses):
 class trial_MOCAP_EMG:
     """ Class that contains the kinematic and EMG data of one trial for a given participant
     """
-    def __init__(self,c3ds, IMU= None,cond="",hmrks = DEF_HMkrs , smrks=DEF_SMkrs):
+    def __init__(self,c3ds,segments,n_mrk,n_ch=0, cond=""):
         """
         The class is created based on one or several concatenated crd files
         
         Input: 
             .c3ds: absolute directories of .c3d files that will be concatenated
             .cond: condition or trial number
+            . segments: list that brings the information to create segment
+                    [["segment_name1",["marker_name1",marker_name2,...],construction method],...]
         """
         self.Tbound = None
         self.mot = None
         self.label = cond
-        
-        if not IMU == None:
-            with open(IMU,"r"):
-                df = pandas.read_csv(IMU)
-                self.IMU ={"meas": df.iloc[:,:3].to_numpy() , "target": df.iloc[:,3:].to_numpy() } 
-                
-        else:
-            self.IMU = None
-        
+        self.segs=dict()
         "Kinematic analysis"
         
-        s = crd2dict (c3ds)
+        s = crd2dict (c3ds,n_mrk,n_ch)
         
-        
+        for segment in segments:
+            seg_name=segment[0]
+            mrks_nm=segment[1]
+            seg_build=segment[2]
+            
+            mrks=dict()
+            
+            for mk_name in mrks_nm:
+                mrk_name_wo_sub=mk_name.split(":")[-1]
+                mrks.update({mrk_name_wo_sub:s['MOCAP'][mk_name]})      
+            
+            self.segs.update({seg_name:Segment(seg_name,mrks,seg_build)})
+            
         # HeadTraj = {'frontl' : s['MOCAP']['hlf'] , 'backl' : s['MOCAP']['hlb'] , 'frontr': s['MOCAP']['hrf'] , 'backr': s['MOCAP']['hrb']}; 
         # ShouldTraj = {'SupL': s['MOCAP']['dlt'] , 'SupR': s['MOCAP']['drt'] , 'InfL' : s['MOCAP']['dlb'] , 'InfR': s['MOCAP']['drb']}; 
         
         
-        globalFrame = np.eye(3); 
-        
         # qTrunk = mrks2q(ShouldTraj , globalFrame , smrks);
         # qHead  = mrks2q(HeadTraj , globalFrame , hmrks);
         
-        qTrunk = mrks2q(s['MOCAP'], globalFrame , smrks);
-        qHead  = mrks2q(s['MOCAP'], globalFrame , hmrks);
+        # qTrunk = mrks2q(s['MOCAP'], globalFrame , smrks);
+        # qHead  = mrks2q(s['MOCAP'], globalFrame , hmrks);
         
                 
         #qHead = qHead         
         #qTrunk = np.full(qTrunk.shape,quaternion.quaternion(1,0,0,0))
             
-        yprHead = q2ypr(qHead*qHead[0].conjugate())
-        yprTrunk= q2ypr(qTrunk[0].conjugate()*qTrunk)
+        # yprHead = q2ypr(qHead*qHead[0].conjugate())
+        # yprTrunk= q2ypr(qTrunk[0].conjugate()*qTrunk)
         
-        yprHeadTrunk = q2ypr((qHead*qTrunk.conjugate())*(qHead[0]*qTrunk[0].conjugate()).conjugate())
+        # yprHeadTrunk = q2ypr((qHead*qTrunk.conjugate())*(qHead[0]*qTrunk[0].conjugate()).conjugate())
         
-        self.q = {"head":qHead , "body": qTrunk}
-        self.RPY = {"head_abs" : np.array(yprHead) , "body_abs": np.array(yprTrunk) , "head_rel" : np.array(yprHeadTrunk)}
+        # self.segs = {"head":qHead , "body": qTrunk}
+        # self.RPY = {"head_abs" : np.array(yprHead) , "body_abs": np.array(yprTrunk) , "head_rel" : np.array(yprHeadTrunk)}
         self.EMG= s["EMG"]
         self.Mrk_samp=dict()
         #self.Mrk_samp = {"head":s['MOCAP']['hlf'],"back":s['MOCAP']['dlt']}
@@ -208,30 +211,6 @@ class trial_MOCAP_EMG:
             filt_data.update({raw_angles[0]:filtfilt(b, a, raw_angles[1])})
         return filt_data
         
-    def seq_from_IMU(self,start=700,stride=2000):
-        """
-        Return sequence list from the recording of the GUI's recording of the target
-        """
-        reference=set(['s-13', 'l13', 'r-29', 'r9', 'r-9', 's40', 'l-40', 'l-13', 'l40', 's-40','r29', 's13'])
-        target = self.IMU["target"]
-        probe = min(np.argmin(target==0,axis=0))+start
-        
-        motions = ["s","r","l"]
-        seq=[]
-        while probe < target.shape[0]:
-            ang_probe = target[probe,:]
-            
-            index = np.argmin(-abs(ang_probe))
-            if abs(int(ang_probe[index]*180/np.pi)) == 30:
-                ang_probe[index]=np.sign(ang_probe[index])*29*np.pi/180
-            motion = motions [index] 
-            seq.append(f"{motion}{int(ang_probe[index]*180/np.pi)}")
-            probe += stride
-        print(len(seq))
-        if len(seq) == 11: 
-            print(set(reference).difference(seq))
-            seq.append(set(reference).difference(seq).pop())
-        return seq
     
     def get_mean_ang(self, neutral = True, Ref="head_rel"):
         """ Returns mean angle in the roll yaw pich decomposition on a given range:
@@ -297,34 +276,40 @@ class trial_MOCAP_EMG:
          return f"{self.label}"
      
 
-def mrks2q(Markers,globalFrame,MrkConf):
-     """
-     This function returns the quaternion of a given body with a set of attached markers
-     Input:
-         .Markers: struct whose fields contain the temporal-spatial data from each marker 
-         Each field is a [sample x 3] matrix with the temporal evolution of each marker
-         . MrkConf: function which indicates the spatial configuration of the markers
-             . Input: Markers
-             . Output:
-                 RefLocal: framework uvw of the body over time.[frames x 3 x 3] Matrix
+class Segment:
+    " Class that contains the segment information"
+    def __init__(self,seg_name,mrks,seg_build):
+        """
+        The class is created based on one or several concatenated crd files
+        
+        Input: 
+            .seg_name: segment name
+            .mrks: struct whose fields contain the temporal-spatial data from each marker 
+                Each field is a [sample x 3] matrix with the temporal evolution of each marker
+            . seg_build: function which indicates the spatial configuration of the markers
+                    
+        Notes:
+            
+            RefLocal: framework uvw of the body over time.[frames x 3 x 3] Matrix
                              Example: RefLocal[i,:,:]=[[ux,uy,uz],[vx,vy,vz],[wx,wy,wz]]
-                         
-     Output:
-         Orient: quaternion array [samples x ] with orientation of the body over time
-    """
+        """
+        self.label = seg_name
+        self.mot = None
+        RefLocal=seg_build(mrks)
+        self.q = quaternion.from_rotation_matrix(RefLocal)
+        
+        #Orient=Orient * Orient[0].conjugate(); # Referering the head frames to the initial frame
+        # Observation: because the variable frame is a numpy array it allow broadcasting with element wise products. Element-wise operations are ufunc with this property. 
+        # Broadcasting rules: https://numpy.org/doc/stable/user/basics.broadcasting.html#general-broadcasting-rules
      
-     Orient=MrkConf(Markers)
-     
-     Orient= quaternion.from_rotation_matrix(Orient) # array of quaternions [samples, Qdim]
-     
-     
-     #Orient=Orient * Orient[0].conjugate(); # Referering the head frames to the initial frame
-     # Observation: because the variable frame is a numpy array it allow broadcasting with element wise products. Element-wise operations are ufunc with this property. 
-     # Broadcasting rules: https://numpy.org/doc/stable/user/basics.broadcasting.html#general-broadcasting-rules
-     
-     ''' The orientation of both frames are aligned tih the global frame at the
-     beginning of the experiment'''     
-     return Orient
+    def YPR(self,ref=None):
+        if ref==None:
+            return q2ypr(self.q*self.q[0].conjugate())
+        else:
+            q1=self.q
+            q2=ref.q
+            return q2ypr((q1*q2.conjugate())*(q1[0]*q2[0].conjugate()).conjugate())
+            
      
 
 q2ypr = np.vectorize(lambda q: yawPitchRoll(q,ls=False),otypes=["f"]*3)
