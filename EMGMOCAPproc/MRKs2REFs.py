@@ -38,7 +38,11 @@ def ortonorm_vspace(v1,v2):
     v3=v3.reshape(-1,1,3)
     
     return v1, v2, v3
-   
+
+def empty_builder():
+    return None
+
+
 def axis_form_romboid_arrangement(Markers):
      """
      This function makes an ortonormal base from four markers in cross
@@ -372,7 +376,27 @@ def DHS_act_tip(markers):
      RefLocal= np.hstack((u,v,w));               # Transformation matrix array [samples , xyz glob(3) , xyz loc(3), ]     
      return RefLocal
      
+def DHS_ecc(Markers):
     
+    hn="SantiagoHeadIbeam2:"
+    tn="SantiagoTrunkIBeam4:"
+    
+    v = (Markers[tn+"t2"] - Markers[tn+"t1"])
+    
+
+    w = np.zeros(v.shape);
+    w[:,2]=1
+    
+    
+    w,v,u= ortonorm_vspace(w,v)
+    u=u.reshape(-1,3)
+    
+    cm= (Markers[hn+"hbc"]+Markers[hn+"hbr"]+Markers[hn+"hbl"]+Markers[hn+"hfr"]+Markers[hn+"hfl"])/5
+    ecc3d= Markers[hn+"hbc"] - Markers[tn+"t1"]
+    #ecc3d= cm - Markers[tn+"t1"]
+    ecc_u=np.sum(ecc3d*u,axis=1)
+    #ecc_u=-ecc3d[:,0]
+    return ecc_u
 
 def YPR_from_mrks():
     pass
