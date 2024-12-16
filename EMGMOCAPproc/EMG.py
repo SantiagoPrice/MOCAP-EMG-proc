@@ -291,8 +291,12 @@ def mot_stats(trial , phase , channels=[0,8,9,10] , debug=False , Norm=[None] , 
     chan = np.array(channels, dtype=np.intp)
     EMG_chans = EMG_filt6( trial.EMG[chan]  , trial.sfemg)
     
-    time = (np.arange(EMG_chans.shape[1])+1300)/trial.sfemg
+    #time = (np.arange(EMG_chans.shape[1])+1300)/trial.sfemg      # this line was used for the calculations of the RAL 1300 migh be related to window filter 
+    time = (np.arange(EMG_chans.shape[1]))/trial.sfemg
     EMGs_stats_trial = np.empty((0,len(channels),2))
+    
+    neu_str=np.zeros((1,1))
+    neu_end=np.ones((1,1))*time[-1]
     
     for motion in trial.mot:
         try:
@@ -319,7 +323,7 @@ def mot_stats(trial , phase , channels=[0,8,9,10] , debug=False , Norm=[None] , 
         elif phase == "20_70":
             delta=rext[:,1:2]-rflex[:,:1] 
             cond = (np.logical_and(time > rflex[:,:1]+0.2*delta, time < rflex[:,:1]+0.8*delta)).any(axis=0)
-        elif phase == "aproaching":
+        elif phase == "approaching":
             cond = (np.logical_and(time > rflex[:,:1] , time < rflex[:,1:2])).any(axis=0)
             if rflex[0,1] > rflex[0,1]:
                 print(trial.label)
@@ -357,6 +361,22 @@ def mot_stats(trial , phase , channels=[0,8,9,10] , debug=False , Norm=[None] , 
             break
 
         EMGs_stats_trial=np.vstack((EMGs_stats_trial,EMGs_stats_mot))
+        
+        
+        neu_str=np.vstack((neu_str,rext[:,1:]))
+        neu_end=np.vstack((rflex[:,0:1],neu_end))
+        
+    # adding recordings during the neutral position
+    #Sorting values from smaller to greater
+    neu_str.sort(axis=0)
+    neu_end.sort(axis=0)
+
+    cond = (np.logical_and(time > neu_str, time < neu_end)).any(axis=0)
+
+    EMG_neu= EMG_chans[:,cond]
+    EMG_stats_neu= np.dstack((EMG_neu.mean(axis = 1),EMG_neu.std(axis = 1)))
+    EMGs_stats_trial=np.vstack((EMGs_stats_trial,EMG_stats_neu))
+    
     return EMGs_stats_trial
 
 def norm_part(part_lab,trials,channels,m_n,nMusc,crit="manual"):
