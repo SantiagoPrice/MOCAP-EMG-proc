@@ -75,41 +75,62 @@ def comparingAngle(MC_EMG,angle="y",frame_ref="head_abs", participant = "" , dat
         plt.savefig(r"Plots/{} {} comparisson_ {}.pdf".format(participant,titles[index],frame_ref))
         plt.close(fig)
 
-def ang_stats(part_trials , ref = "head_rel", save = False ):
+def ang_stats(trials , seg="head", ref_seg="", offs_com=True,  save = False ):
 
     
-    motions = part_trials[0].mot
+    motions = trials[0].mot
     
-    cond = ["Low Stiff Part1","Low Stiff Part2","Medium Stiff Part1","Medium Stiff Part2","High Stiff Part1","High Stiff Part1"]
+    cond = ["LS1","LS2","MS1","MS2","HS1","HS1"]
+    
+    cond= [trial.label[3:] for trial in trials] 
+    
     planes = ["s","l","r"]
-    if len(part_trials)==8:
-        cond=["Free Part1","Free Part2"]+cond
-        
-    fig = plt.figure(f"Ang stats {part_trials[0].label[:3]}: {ref}")
+    remap=dict({"e":"l","f":"l","r":"r"})
+    
+    remap_leg=dict({"P01 f":"0 Stiffness","P01 l":"Low Stiffness","P01 m":"Middle Stiffness","P01 h":"High Stiffness",})
+    remap_mot=dict({"e15":"extension","f15":"flexion","r15":"right rotation","r-15":"left rotation","n0":"neutral"})
+    
+    if len(trials)==8:
+        cond=["Free 1","Free 2"]+cond
+    
+    if offs_com:
+        oc_lab="offset compensation"
+    else:
+        oc_lab=""
+    
+    fig = plt.figure(f"Ang stats {trials[0].label[:3]}: {seg}->{ref_seg}"+oc_lab)
     
     ax = fig.add_subplot(1,1,1)
-    ax.set_title("Angles for diferent conditions" + part_trials[0].label[:3])
     
     
-    ax.set_xticks(np.arange(len(motions)),motions)
-    ax.set_yticks([-40,-29,-13,-9,9,13,29,40])
+    ax.set_title("Angles for diferent conditions" + trials[0].label[:3]+oc_lab)
+    
+    rem_mot=[remap_mot[m] for m in motions]
+    ax.set_xticks(np.arange(len(motions)),rem_mot)
+    #ax.set_yticks([-40,-29,-13,-9,9,13,29,40])
     color_wheel = mcolors.get_named_colors_mapping()
     color_key = list(color_wheel.keys())
     col = [color_key[i*50] for i in range(len(cond))]
-    bar_width = 1/(len(part_trials)*2)
+    re_leg=[remap_leg[trial.label] for trial in trials]
+    
+    
+    patches= [Patch(color=cl , label=cnd) for cl , cnd in zip(col,re_leg)]
+    bar_width = 1/(len(trials)*2)
               
     for i , mot in enumerate(motions):
-        index= planes.index(mot[0])
+        plane= planes.index(remap[mot[0]])
         means_stds=np.empty((2,0))
-        #print(mot , index)
-        # Pick the statistics values for each condition
-        for trial in part_trials:
+
+        for trial in trials:
             
-            offset=trial.get_mean_ang()["value"][:,index]
+            if offs_com==True:
+                offset=trial.get_mean_ang()["value"][:,plane]
+            else:
+                offset=np.zeros(2)
             
-            angs=trial.get_mean_ang(neutral=False,Ref = ref)
+            angs=trial.get_mean_ang(neutral=False)
             if  list(angs.keys()).count(mot):
-                angs=angs[mot]["value"][:,index]
+                angs=angs[mot]["value"][:,plane]
                 aux = np.array([[angs[0]-offset[0]],[offset[1]+angs[1]]])
             else:
                 aux=np.zeros((2,1))
@@ -119,12 +140,11 @@ def ang_stats(part_trials , ref = "head_rel", save = False ):
         x = np.linspace(0,len(cond)*bar_width,(len(cond))) + i
         
         # Plot the means as bars
-        ax.bar(x, means_stds[0,:], yerr=means_stds[1,:], align='center', alpha=1, width=bar_width, color=col[:len(cond)], label=cond)
-        #ax.set_ylim([-6*10**-5, 6*10**-5])
+        ax.bar(x, means_stds[0,:], yerr=means_stds[1,:], align='center', alpha=1, width=bar_width, color=col[:len(cond)])
+
     plt.grid("on")
-    # if save:
-    #     plt.savefig(r"Plots/{} angle_stats for Head_rel.pdf".format(participant))
-    #     plt.close(fig)
+    plt.legend(handles=patches,loc="upper center")
+
         
 def ANG_plotmultip(parts,save=False,debug=False, met="mean" ,style=None ,ref="head_rel"):
     Nparts= len(parts)
@@ -516,88 +536,112 @@ def ANG_plotmultip(parts,save=False,debug=False, met="mean" ,style=None ,ref="he
                 plt.savefig(r"./Plots/9302023/EMG_{}_{}_group.pdf".format(met,style))
 
 
-def EMG_plot1p(part_conds,phase="full_cicle",save=False,debug=False, chans=[0,8,9,10], met="mean", labs=None):
+def EMG_plot1p(part_conds,phase="full_cicle",save=False,debug=False, chans=[0,8,9,10], met="mean", norm=None , labs=None):
     #print(part_conds[0])
-    motions = part_conds[0].mot
+    motions = part_conds[0].mot.copy()
     motions.sort(key=crit)
+    motions+=["n0"]
     part_N= part_conds[0].label
+    mot_N=len(motions)
+    print(part_N)
     #print(f" #printing {part_N}")
+    remap_mot=dict({"e15":"extension","f15":"flexion","r15":"right rotation","r-15":"left rotation","n0":"neutral"})
+    remap_leg=dict({"P01f":"0 Stiffness","P01l":"Low Stiffness","P01m":"Middle Stiffness","P01h":"High Stiffness",})
     
     muscles = ['(R) Sternocleidomastoid', '(L) Sternocleidomastoid','(R) Para spinal','(L) Para spinal']
-    if len(part_conds) == 6:
-        cond_lb = ['LS1', 'LS2', 'MS1', 'MS2', 'HS1', 'HS2']
-        jcond_lb= ['LS', 'MS', 'HS']
-    else:
-        cond_lb = ['F1', 'F2', 'LS1', 'LS2', 'MS1', 'MS2', 'HS1', 'HS2']
-        jcond_lb= ['F','LS', 'MS', 'HS']
+    
+    muscles = ['left SPL','right SPL','left STR','right STR']
+    cond_lb = []
+    # if len(part_conds) == 6:
+    #     cond_lb = ['LS1', 'LS2', 'MS1', 'MS2', 'HS1', 'HS2']
+    #     jcond_lb= ['LS', 'MS', 'HS']
+    # else:
+    #     cond_lb = ['F1', 'F2', 'LS1', 'LS2', 'MS1', 'MS2', 'HS1', 'HS2']
+    #     jcond_lb= ['F','LS', 'MS', 'HS']
+   
+    for cond in part_conds:
+    
+        cond_lb.append(cond.label)
+        
+    jcond_lb= cond_lb         
+        
     
    #print(part_N[:3])
     EMG_table = []
     fig = plt.figure(f"EMG_{met}_{part_N} all trials. Phase {phase}.")
      
-    print(70*"_"+f"Muscle activity of the participant {int(part_N[1:4])}"+"_"*70)
+    print(70*"_"+f"Muscle activity of the participant {int(part_N[1:3])}"+"_"*70)
     for m_n , muscle in enumerate(muscles):
             #print(f"Processsing {muscle}")
             ax = fig.add_subplot(len(muscles),1,m_n+1)
-            ax.set_title(part_N[:-4]+ ": " + muscle + " " + phase,fontsize = "xx-large")
-            ax.set_xticks(np.arange(len(motions)),motions)
+            ax.set_title(muscle + " (" + phase+")",fontsize = 30)
+            plt.yticks(fontsize=15)
+            plt.xticks(fontsize=15)
+            if m_n==len(muscles)-1:
+                motion_relab= [remap_mot[m] for m in motions]
+                ax.set_xticks(np.arange(mot_N),motion_relab,fontsize=20)
+            else:
+                ax.set_xticks(np.arange(mot_N),[]*mot_N)
+            
+            if norm==None:
+                ax.set_ylabel("Normalized EMG [$\mu V$]",fontsize=20)    
+            else:
+                ax.set_ylabel("Normalized EMG [-]")
+                
             col_idx = np.linspace(0,255,len(jcond_lb)).astype(int)
             col = list(mpl.cm.gist_rainbow(col_idx))
-            patches= [Patch(color=cl , label=cnd) for cl , cnd in zip(col,jcond_lb)]
+            patches= [Patch(color=cl , label=remap_leg[cnd]) for cl , cnd in zip(col,jcond_lb)]
             
             # Pick the statistics values for each condition
-            Ncond=len(jcond_lb)    
+            Ncond=len(cond_lb)    
             
-            means_t=np.zeros((Ncond*2,len(motions)))
-            stds_t=np.zeros((Ncond*2,len(motions)))
-            means=np.empty((0,len(motions)))
-            stds=np.empty((0,len(motions)))
+            means_t=np.zeros((Ncond,mot_N))
+            stds_t=np.zeros((Ncond,mot_N))
+            means=np.empty((0,mot_N))
+            stds=np.empty((0,mot_N))
             
             
-            max_EMG_val_ind=np.array([EMG.max_EMG(part_conds[-i],channels=chans) for i in range(1,3)])
             
-            max_EMG_val=max_EMG_val_ind[:,0,:]
-            max_EMG_ind=max_EMG_val_ind[:,1,:]
-            max_EMG_abs=max_EMG_val.max(axis=0)
+            if norm=="max":
+                max_EMG_val_ind=np.array([EMG.max_EMG(part_conds[-i],channels=chans) for i in range(1,3)])
+                max_EMG_val=max_EMG_val_ind[:,0,:]
+                max_EMG_abs=max_EMG_val.max(axis=0)
+                Norm=max_EMG_abs[[m_n]]
+                scale=1
+                
+            else:
+                Norm=[None]
+                scale=10**6
+                
             #max_EMG_abs=np.ones(max_EMG_abs.shape)
-            for n_cond , cond_dat in enumerate(part_conds):
+            for n_cond , cond_dat in enumerate(part_conds):        
+                means_stds=EMG.mot_stats(cond_dat,phase,Norm=Norm,channels=[chans[m_n]])[:,0,:]*scale
                 
-                means_stds=EMG.mot_stats(cond_dat,phase,Norm=max_EMG_abs[[m_n]],channels=[chans[m_n]])[:,0,:]
-                
-                
-                for nm_loc, m in enumerate(cond_dat.mot):
+                for nm_loc, m in enumerate(cond_dat.mot + ["n0"]):
                     nm_glb=motions.index(m)
                     means_t[n_cond,nm_glb] = means_stds[nm_loc,0]
                     stds_t[n_cond,nm_glb] = means_stds[nm_loc,1]
                     
-                    if m =="r29" and (n_cond==0 or n_cond==5) and m_n==1:
-                        a=["ls","hs"]
-                        
-                       #print(a[n_cond==0])
-                       #print(means_stds[nm_loc,0])
-                    
                     if debug:
-                        if m_n ==1 and n_cond==0:
-                                pass
-                                #print(f"Mean activity of {muscle} for {m}")
-                                #print(means_stds[nm_loc,0])
-            for condf in jcond_lb:
-                trial1=cond_lb.index(f"{condf}1")
-                trial2=cond_lb.index(f"{condf}2")
-                means_t[trial2,means_t[trial2]==0] = means_t[trial1,means_t[trial2]==0]
-                means_t[trial1,means_t[trial1]==0] = means_t[trial2,means_t[trial1]==0]
-                
+                        if m_n ==1 and n_cond==0:                          
+                                print(f"Mean activity of {muscle} for {m}")
+                                print(means_stds[nm_loc,0])
+                                  
+                                
+            if not len(cond_lb)==len(jcond_lb):
+                for condf in jcond_lb:
+                    trial1=cond_lb.index(f"{condf}1")
+                    trial2=cond_lb.index(f"{condf}2")
+                    means_t[trial2,means_t[trial2]==0] = means_t[trial1,means_t[trial2]==0]
+                    means_t[trial1,means_t[trial1]==0] = means_t[trial2,means_t[trial1]==0]
+                                           
+                    means=np.vstack((means,means_t[trial1:trial2+1,:].mean(axis = 0)))
+                    stds=np.vstack((stds,stds_t[trial1:trial2+1,:].mean(axis = 0)))     
                     
-                #means=np.vstack((means,means_t[trial2,:]))
-                #stds=np.vstack((stds,stds_t[trial2,:]))
-                means=np.vstack((means,means_t[trial1:trial2+1,:].mean(axis = 0)))
-                stds=np.vstack((stds,stds_t[trial1:trial2+1,:].mean(axis = 0)))
-               
-                
-                #print(condf)
-                #print(means_t[trial1,:])
-                #print(means_t[trial2,:])
-                #print(means[-1,:])
+            else:
+                     means=means_t
+                     stds=stds_t
+
             minimal = False
             if minimal:
                 L40s=[motions.index("l40")]+[motions.index("l-40")]
@@ -608,28 +652,30 @@ def EMG_plot1p(part_conds,phase="full_cicle",save=False,debug=False, chans=[0,8,
                 for n_cond , cond_lab in enumerate(jcond_lb):    
                     EMG_table.append([cond_lab]+["{:.4f} +-{:.4f}".format(m,s) for m , s in zip(means[n_cond],stds[n_cond])])
                     heads=motions
+            
             if "Stern" in muscle:
                 print(muscle)
                 print(tabulate.tabulate(EMG_table, headers = heads, tablefmt="fancy_grid"))
+            
             EMG_table=[]
             means=means.T.reshape(-1)
             stds=stds.T.reshape(-1)
-            ##print(f"means: {means}")
+
+
             # Calculate the x positions for the bars
-            x = np.array([np.linspace(0,0.5,Ncond) + i for i in range(len(motions))]).reshape(-1)
+            x = np.array([np.linspace(0,0.5,Ncond)-0.25 + i for i in range(mot_N)]).reshape(-1)
   
-            # Plot the means as bars
-            ##print(abs(means))
+            # Plot the means as bars              
             ax.bar(x, abs(means), yerr=stds, align='center', alpha=0.7, width=0.5/Ncond, color=col*Ncond)
             if m_n==2:
-                ax.legend(handles=patches,bbox_to_anchor=(1, 0.))
+                ax.legend(handles=patches,bbox_to_anchor=(1, 0.8),fontsize=20)
             plt.grid("on")
             ax.set_ylim([0, max(abs(means))*1.1])
            # ax.update(hspace=0.5)
     time.sleep(4)
-    mng = plt.get_current_fig_manager()
+    #mng = plt.get_current_fig_manager()
     #mng.full_screen_toggle()  
-    plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=0.50)       
+    plt.tight_layout(pad=3, w_pad=0.5, h_pad=0.50)    
     if save:
                 plt.savefig(r"Plots/{} EMG profile {}.pdf".format(part_N,phase))
 

@@ -61,7 +61,7 @@ def crd2dict (file_addresses,n_mark= 15,n_chan=7):
 
         #Emg Data --------------------------------------------------------------
         analog_labels=c['parameters']["ANALOG"]["LABELS"]["value"]
-        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,n_chan)] #getting the first 7 channels, they can be disorganized
+        analog_idx= [analog_labels.index(f"Sensor {i}.EMG{i}") for i in range(1,n_chan+1)] #getting the first 7 channels, they can be disorganized
         analog_data = c['data']['analogs']
     
         
@@ -149,7 +149,7 @@ class trial_MOCAP_EMG:
         self.sfmc = s["SFMC"]
         self.sfemg = s ["SFEMG"]
         
-    def set_boundaries(self , seq,t_phases=np.empty((0,1))):
+    def set_boundaries(self , seq,seg="head",t_phases=np.empty((0,1))):
         """
         This function ask for manually indicate the boundary points of the flexion
         and extension of the motion sequence. Such a data is stored in the dictionary.
@@ -168,7 +168,11 @@ class trial_MOCAP_EMG:
         fig = plt.figure()
         ax = plt.axes()
         
-        RPY = self.RPY["head_abs"]
+        
+        s_main=self.segs[seg]
+        
+        RPY = s_main.YPR()
+        #RPY = self.RPY["head_abs"]
         time= np.arange(RPY.shape[1])/self.sfmc
         ax.plot(time,RPY.T)
         ax.set_title(r"{:s}: ".format(self.label)) 
@@ -212,27 +216,46 @@ class trial_MOCAP_EMG:
         return filt_data
         
     
-    def get_mean_ang(self, neutral = True, Ref="head_rel"):
+    def get_mean_ang(self,seg="head",ref_seg="", neutral = True):
         """ Returns mean angle in the roll yaw pich decomposition on a given range:
             Neutral TRUE -> Range is out of the displacement period
-            Neutral FALSE -> Range is during the holding phase
+            Neutral FALSE -> Range is during the holding phase of each movement
             """
+        s_main=self.segs[seg]
+        if not ref_seg=="":
+            s_ref=self.segs[ref_seg]
+        else:
+            s_ref=None
+        
             
         if self.Tbound == None:
             print ("Define limits first")
             return
-        time = np.arange(self.RPY[Ref].shape[1])/self.sfmc
+        
+        
+        
+        
+        # Unwrapping the time instant of each motion
+        
+        rflex= np.empty([0,2])
+        rext= np.empty([0,2])
+        for motion in self.mot: 
+                rflex_mot = self.Tbound[motion][:1,:].reshape([-1,2])
+                rext_mot = self.Tbound[motion][1:,:].reshape([-1,2])
+                
+                rext=np.vstack((rext,rext_mot))
+                rflex=np.vstack((rflex,rflex_mot))
+        flex_str= rflex[:,0:1]
+        flex_str.sort(axis=0)
+        
+        fref = int((flex_str[0,0]-1)*self.sfmc)  # Reference time occurs 1 second before the start of the first movement
+        
+        RPY = s_main.get_orient(s_ref,frame_ref=fref,form="YPR")
+        time = np.arange(RPY.shape[0])/self.sfmc
         
         if neutral:
-            flex_str= np.empty([0,1])
-            ext_end= np.empty([0,1])
-            
-            for motion in self.mot: 
-                rflex = self.Tbound[motion][:1,:].reshape([-1,2])[:,0:1]
-                rext = self.Tbound[motion][1:,:].reshape([-1,2])[:,1:]
-                
-                ext_end=np.vstack((ext_end,rext))
-                flex_str=np.vstack((flex_str,rflex))
+            flex_str= rflex[:,0:1]
+            ext_end= rext[:,1:]
             
             #sorting values
             ext_end.sort(axis=0)
@@ -242,22 +265,22 @@ class trial_MOCAP_EMG:
             
             #print(np.hstack((ext_end,flex_str)))    
             cond = (np.logical_and(time < flex_str , time > ext_end)).any(axis=0)    
-            offset= np.vstack((self.RPY[Ref][:,cond].mean(axis = 1),self.RPY[Ref][:,cond].std(axis = 1)))
+            offset= np.vstack((RPY[cond,:].mean(axis = 0),RPY[cond,:].std(axis = 0)))
             
             return {"value": offset,"rng":np.hstack((ext_end,flex_str))}
             
         else:
 
             mean_ang = dict()
-            for motion in self.mot:
+            for n_mot , motion in enumerate(self.mot):
                 flex_end = self.Tbound[motion][:1,:].reshape([-1,2])[:,1:]
                 ext_str = self.Tbound[motion][1:,:].reshape([-1,2])[:,0:1]               
                 
                 cond = (np.logical_and(time > flex_end , time < ext_str)).any(axis=0)
                     
                 
-                RPY_select = self.RPY[Ref][:,cond]
-                RPY_stats = np.vstack(( RPY_select.mean(axis = 1) , RPY_select.std(axis=1)))
+                RPY_select = RPY[cond,:]
+                RPY_stats = np.vstack(( RPY_select.mean(axis = 0) , RPY_select.std(axis=0)))
                 mean_ang.update({motion:{"value":RPY_stats,"rng": np.hstack((flex_end,ext_str))}})
         return mean_ang
         
@@ -278,13 +301,13 @@ class trial_MOCAP_EMG:
 
 class Segment:
     " Class that contains the segment information"
-    def __init__(self,seg_name,mrks,seg_build):
+    def __init__(self,seg_name="empty",mrks=dict(),seg_build=MRKs2REFs.empty_builder):
         """
         The class is created based on one or several concatenated crd files
         
         Input: 
             .seg_name: segment name
-            .mrks: struct whose fields contain the temporal-spatial data from each marker 
+            .mrks: dictionary containing the temporal-spatial data from each marker 
                 Each field is a [sample x 3] matrix with the temporal evolution of each marker
             . seg_build: function which indicates the spatial configuration of the markers
                     
@@ -302,17 +325,58 @@ class Segment:
         # Observation: because the variable frame is a numpy array it allow broadcasting with element wise products. Element-wise operations are ufunc with this property. 
         # Broadcasting rules: https://numpy.org/doc/stable/user/basics.broadcasting.html#general-broadcasting-rules
      
-    def YPR(self,ref=None):
-        if ref==None:
-            return q2ypr(self.q*self.q[0].conjugate())
+    def get_orient(self,seg_ref=None,frame_ref=0,form="q"):
+        """
+        Computes the segment orientation about the global framework or another segment
+
+        Parameters
+        ----------
+        seg_ref : Segment
+            DESCRIPTION. Reference segment. If it is None, the global reference is used.The default is None.
+        frame_ref : Int
+            DESCRIPTION. Frame number where the neutral orientation is set. If it is None, no frame of reference is used. The default is 0.
+        form : TYPE, str
+            DESCRIPTION. Format of the output angle. Options are: "q" for quaternions, "YPR" in the yaw pitch roll representation and "ang3d" for the angle of rotation vector. The default is "q".
+
+        Returns
+        -------
+        quaternion , np.array(nsamples,3), np.array(nsamples,1) 
+            Segment orientation whose format depends on the form variable
+
+        """
+        # Compute quaternion
+        
+        qref=quaternion.quaternion(1,0,0,0)
+        if seg_ref==None:
+            if not frame_ref== None:
+                qref=self.q[frame_ref].conjugate()
+            q=self.q
+        
         else:
             q1=self.q
-            q2=ref.q
-            return q2ypr((q1*q2.conjugate())*(q1[0]*q2[0].conjugate()).conjugate())
+            q2=seg_ref.q           
+            q=q1*q2.conjugate()
+            if not frame_ref== None:
+                qref=(q1[frame_ref]*q2[frame_ref].conjugate()).conjugate()
             
-     
+        q=q*qref
+        
+        if form=="q":
+            return quaternion.as_float_array(q)
+        
+        elif form=="YPR":
+            q2ypr = np.vectorize(lambda q: yawPitchRoll(q,ls=False),otypes=["f"]*3)
+            return np.array(q2ypr(q)).T
+        
+        elif form=="3dang":
+           rv=quaternion.as_rotation_vector(q)
 
-q2ypr = np.vectorize(lambda q: yawPitchRoll(q,ls=False),otypes=["f"]*3)
+           return np.linalg.norm(rv,axis=-1).reshape(-1,1)*180/np.pi
+        
+        else:
+            raise NameError("Non valid form: choose between q, YPR or 3dang")
+
+
 
 
 

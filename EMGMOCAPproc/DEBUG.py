@@ -42,30 +42,69 @@ def RPY_and_EMG(trial,channels=[0,8,9,10],shaded=True,RPY_add=False,Filt_type=1,
     plt.xticks(fontsize=30)
     return figEMGRPY
     
-    
 
-def RPYvsTime(trial,shaded=False,cond="head_rel",AX=None,FIG=None):
-    RPY = trial.RPY[cond]
-    time= np.arange(RPY.shape[1])/trial.sfmc
+def RPY_mTrials(part,seg="head",ref_seg="",f_ref=True):
+    figRPY=plt.figure("angle accross trials")  
+    axRPY=figRPY.add_subplot()
+    for trial in part:
+        leg_use = (trial == part[-1])     
+        RPYvsTime(trial,shaded=False,seg="head",ref_seg="",frame_ref=f_ref,ang_type="YPR",AX=axRPY,FIG=figRPY, leg=leg_use)
+        
+
+def RPYvsTime(trial,shaded=False,seg="head",ref_seg="",frame_ref=True,ang_type="YPR",AX=None,FIG=None, leg=False):
+    s_main=trial.segs[seg]
+    if not ref_seg=="":
+        s_ref=trial.segs[ref_seg]
+    else:
+        s_ref=None
+    
+    if frame_ref:
+        #Fix the reference time 2s before the statrt of the head movement
+        rflex= np.empty([0,2])
+        for motion in trial.mot: 
+                rflex_mot = trial.Tbound[motion][:1,:].reshape([-1,2])
+                rflex=np.vstack((rflex,rflex_mot))
+        flex_str= rflex[:,0:1]
+        flex_str.sort(axis=0)
+        
+        time_ref= flex_str[0,0]-2
+        fref = int((time_ref)*trial.sfmc)
+        
+    else:
+        time_ref=None
+        fref=None
+    
+    
+    ang=s_main.get_orient(s_ref,form=ang_type,frame_ref=fref)
+    print(ang)
+    if AX:
+       ang=ang[:,1:2] 
+    
+    time= np.arange(ang.shape[0])/trial.sfmc
+    
     if FIG:
         fig=FIG
     else:
-        fig=plt.figure(trial.label + cond) 
+        fig=plt.figure(f"{trial.label} {seg} -> {ref_seg}. Time reference: {time_ref}. Trial: {trial.label}. Format: {ang_type}") 
     if AX:
         ax=AX
-        ax.set_title(r" roll,pitch,yaw angles of the head during the trial")
+        ax.set_title(r" Sagittal angle of the head during each trial")
+        plt.grid("on")
+                
     else:
         ax = fig.add_subplot(1, 1, 1)
-        ax.set_title(r"Rotation assesment for{:s} cond {} ".format(trial.label,cond))
-    ax.plot(time,RPY.T,linewidth=2)
+        ax.set_title(r"Rotation assesment for {} -> {} during the {:s} trial".format(seg,ref_seg,trial.label))
+
+        
+    ax.plot(time,ang,linewidth=2,label=trial.label)
+      
     
-    
-    Xl = r'time' 
-    Yl= [r"$\alpha_{sag}$" , r"$\beta_{cor}$" , r"$\gamma_{ax}$"]
+    plt.axhline(y=0,color="black")
+        
+    Xl = r'time'     
     #leg=[r"h_{rel}","h_{abs}","b_{abs}"]  
     plt.xlabel(Xl)
-    plt.legend(Yl,fontsize=30,loc="lower left")
-    plt.axhline(y=0,color="black")
+    
     
     
 
@@ -85,7 +124,8 @@ def RPYvsTime(trial,shaded=False,cond="head_rel",AX=None,FIG=None):
         #Tmx= trial.Tbound[trial.seq_from_IMU()[-1]].max()+1
         Tmx= np.array([times.max(axis=0).max() for times in trial.Tbound.values()]).max()
 
-        ax.set_xlim([0,Tmx])
+        #ax.set_xlim([0,Tmx])
+        #ax.set_ylim([-60,60])
         ax.xaxis.set_major_locator(ticker.MultipleLocator(25))
         ax.yaxis.set_major_locator(ticker.MaxNLocator(5))
         plt.yticks(fontsize=30)
@@ -95,10 +135,11 @@ def RPYvsTime(trial,shaded=False,cond="head_rel",AX=None,FIG=None):
             
             #relabeling
             mtp=key[0]
-            ang=int(key[1:])
-            ang_rounded=int(np.round(abs(ang)/5)*5)
-            tag_head_remap={"s":["BF","FF"],"r":["RR","LR"],"l":["RF","LF"],}
-            tag=tag_head_remap[mtp][np.sign(ang)>0]+str(ang_rounded)
+            # ang=int(key[1:])
+            # ang_rounded=int(np.round(abs(ang)/5)*5)
+            #tag_head_remap={"s":["BF","FF"],"r":["RR","LR"],"l":["RF","LF"],}
+            #tag=tag_head_remap[mtp][np.sign(ang)>0]#+str(ang_rounded)
+            tag=key
             
             flexlims= bounds[0].reshape((-1,2))
             extlims = bounds[1].reshape((-1,2))
@@ -111,7 +152,7 @@ def RPYvsTime(trial,shaded=False,cond="head_rel",AX=None,FIG=None):
                     #print(f"Mean activity of {muscle} for {key}")
                     #print(EMGs[m_n,int(flim*2000):int(elim*2000)].mean())
                 lab_xpos = (flim[1]+elim[0])/2-4
-                lab_ypos = 0.7*(RPY.T).max().max()
+                lab_ypos = 0.7*(ang.T).max().max()
                 ax.text(lab_xpos, lab_ypos, tag ,fontsize= 30)  
     
     # if hasattr(trial, 'Tbound') and isinstance(trial.Tbound, dict) and shaded:
@@ -136,8 +177,22 @@ def RPYvsTime(trial,shaded=False,cond="head_rel",AX=None,FIG=None):
     #             limits= limits.reshape(-1,2)
     #             for n_lim in range(limits.shape[0]):
     #                 plt.axvspan(limits[n_lim, 0], limits[n_lim,1], facecolor=color, alpha=0.3)
+    if AX: 
+        if leg:
+            lines= [ln for ln in ax.get_lines()]
+            ax.legend(handles=lines)
+    else:
+        if ang_type=="YPR":
+            Yl= [r"$\alpha_{sag}$" , r"$\beta_{cor}$" , r"$\gamma_{ax}$"]
+        elif ang_type=="3d ang":
+            Yl= ["3d ang"]
+        else:
+            Yl= ["w","x","y","z"]
+        ax.legend(Yl,fontsize=30,loc="lower right")
+        
     fig.subplots_adjust(left=0.013, right=0.996 , top=0.98 , bottom=0.027, wspace=0.2 , hspace=0.2)
     return fig
+
 def crit(a):
     return ord(a[0])*100+int(a[1:])
 
@@ -157,6 +212,7 @@ def EMGvsTime_alltrials(part,chans=[0,8,9,10],f=True,s=False,rpy=False,filt=1,ts
 def EMGvsTime(trial,channels=[0,8,9,10],shaded=False,RPY_add=False,Filt_type=1,superp=False,spec=False,plt_type="Tser",AX=None,FIG=None):
     muscles = ['(R) Sternocleidomastoid', '(L) Sternocleidomastoid','(R) Para spinal','(L) Para spinal']
     muscles = ['right STR', 'left STR','right SPL','left SPL']
+    muscles = ['left SPL','right SPL','left STR','right STR']
     tags= [r"EMG" , r"$\alpha_{sag}$" , r"$\beta_{cor}$" , r"$\gamma_{ax}$"]
     #leg=[r"h_{rel}","h_{abs}","b_{abs}"]  
     motions = trial.mot
@@ -297,12 +353,12 @@ def EMGvsTime(trial,channels=[0,8,9,10],shaded=False,RPY_add=False,Filt_type=1,s
                 # ax.xticks(fontsize=30)                          
                 for key, bounds in trial.Tbound.items():
                     
-                    #relabeling
-                    mtp=key[0]
-                    ang=int(key[1:])
-                    ang_rounded=int(np.round(abs(ang)/5)*5)
-                    tag_head_remap={"s":["BF","FF"],"r":["RR","LR"],"l":["RF","LF"],}
-                    tag=tag_head_remap[mtp][np.sign(ang)>0]+str(ang_rounded)
+                    #relabeling: this was done to fix an issue with prior labeling
+                    #mtp=key[0]
+                    #ang=int(key[1:])
+                    #ang_rounded=int(np.round(abs(ang)/5)*5)
+                    #tag_head_remap={"s":["BF","FF"],"r":["RR","LR"],"l":["RF","LF"],}
+                    #tag=tag_head_remap[mtp][np.sign(ang)>0]+str(ang_rounded)
                     
                     flexlims= bounds[0].reshape((-1,2))
                     extlims = bounds[1].reshape((-1,2))
@@ -321,7 +377,7 @@ def EMGvsTime(trial,channels=[0,8,9,10],shaded=False,RPY_add=False,Filt_type=1,s
                             #print(EMGs[m_n,int(flim*2000):int(elim*2000)].mean())
                         lab_xpos = (flim[1]+elim[0])/2-4
                         lab_ypos = 0.7*max(EMGs[m_n])
-                        ax.text(lab_xpos, lab_ypos, tag ,fontsize= 30)                      
+                        ax.text(lab_xpos, lab_ypos, key ,fontsize= 30)                      
                         
             if muscle in ax_list and m_n==1:
                     lines= [ln for ln in ax.get_lines() if ln.get_label() != "haxis" ]
