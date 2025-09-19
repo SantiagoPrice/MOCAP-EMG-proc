@@ -82,13 +82,21 @@ def ang_stats(trials , seg="head", ref_seg="", offs_com=True,  save = False ):
     
     cond = ["LS1","LS2","MS1","MS2","HS1","HS1"]
     
+    #Setting fontsizes
+    factor=2
+    leg_size=20*factor
+    title_size=30*factor
+    xl_size=30*factor*0.75
+    yl_size=xl_size
+    ticks_size=15*factor
+    
     cond= [trial.label[3:] for trial in trials] 
     
     planes = ["s","l","r"]
     remap=dict({"e":"l","f":"l","r":"r"})
     
-    remap_leg=dict({"P01 f":"0 Stiffness","P01 l":"Low Stiffness","P01 m":"Middle Stiffness","P01 h":"High Stiffness",})
-    remap_mot=dict({"e15":"extension","f15":"flexion","r15":"right rotation","r-15":"left rotation","n0":"neutral"})
+    remap_leg=dict({"P01 f1":"Baseline 1 (No Stiffness)","P01 f":"Baseline 2 (No Stiffness)","P01 l":"Low Stiffness","P01 m":"Middle Stiffness","P01 h":"High Stiffness",})
+    remap_mot=dict({"e15":"Extension\n(Saggital plane)","f15":"Flexion\n(Saggital plane)","r15":"Right Rotation\n(Horizontal plane)","r-15":"Left Rotation\n(Horizontal plane)","n0":"Neutral\n(Saggital plane)"})
     
     if len(trials)==8:
         cond=["Free 1","Free 2"]+cond
@@ -103,11 +111,13 @@ def ang_stats(trials , seg="head", ref_seg="", offs_com=True,  save = False ):
     ax = fig.add_subplot(1,1,1)
     
     
-    ax.set_title("Angles for diferent conditions" + trials[0].label[:3]+oc_lab)
+    ax.set_title("Motion amplitude for each condition",fontsize=title_size)
     
-    rem_mot=[remap_mot[m] for m in motions]
-    ax.set_xticks(np.arange(len(motions)),rem_mot)
-    #ax.set_yticks([-40,-29,-13,-9,9,13,29,40])
+    rem_mot=[remap_mot[m] for m in motions]+[remap_mot["n0"]]
+    ax.set_xticks(np.arange(len(motions)+1),rem_mot,fontsize=xl_size)
+    ax.set_ylabel("Inclination [degrees]",fontsize=yl_size)  
+    
+    ax.tick_params(axis='y', which='major', labelsize=ticks_size)
     color_wheel = mcolors.get_named_colors_mapping()
     color_key = list(color_wheel.keys())
     col = [color_key[i*50] for i in range(len(cond))]
@@ -134,6 +144,7 @@ def ang_stats(trials , seg="head", ref_seg="", offs_com=True,  save = False ):
                 aux = np.array([[angs[0]-offset[0]],[offset[1]+angs[1]]])
             else:
                 aux=np.zeros((2,1))
+                
             means_stds=np.hstack((means_stds,aux))
         
         # Calculate the x positions for the bars
@@ -141,9 +152,19 @@ def ang_stats(trials , seg="head", ref_seg="", offs_com=True,  save = False ):
         
         # Plot the means as bars
         ax.bar(x, means_stds[0,:], yerr=means_stds[1,:], align='center', alpha=1, width=bar_width, color=col[:len(cond)])
-
+    
+    # Adding neutral position
+    means_stds_neu=np.empty((2,0))
+    for trial in trials:
+        offset=trial.get_mean_ang()["value"][:,1:2]
+        means_stds_neu=np.hstack((means_stds_neu,offset))  
+    # Calculate the x positions for the bars
+    x = np.linspace(0,len(cond)*bar_width,(len(cond))) + (i+1)
+    # Plot the means as bars
+    ax.bar(x, means_stds_neu[0,:], yerr=means_stds_neu[1,:], align='center', alpha=1, width=bar_width, color=col[:len(cond)])
+            
     plt.grid("on")
-    plt.legend(handles=patches,loc="upper center")
+    plt.legend(handles=patches,loc="upper right",fontsize=leg_size)
 
         
 def ANG_plotmultip(parts,save=False,debug=False, met="mean" ,style=None ,ref="head_rel"):
@@ -536,7 +557,7 @@ def ANG_plotmultip(parts,save=False,debug=False, met="mean" ,style=None ,ref="he
                 plt.savefig(r"./Plots/9302023/EMG_{}_{}_group.pdf".format(met,style))
 
 
-def EMG_plot1p(part_conds,phase="full_cicle",save=False,debug=False, chans=[0,8,9,10], met="mean", norm=None , labs=None):
+def EMG_plot1p(part_conds,phase="full_cycle",save=False,debug=False, chans=[0,8,9,10], met="mean", norm=None , labs=None):
     #print(part_conds[0])
     motions = part_conds[0].mot.copy()
     motions.sort(key=crit)
@@ -546,8 +567,12 @@ def EMG_plot1p(part_conds,phase="full_cicle",save=False,debug=False, chans=[0,8,
     print(part_N)
     #print(f" #printing {part_N}")
     remap_mot=dict({"e15":"extension","f15":"flexion","r15":"right rotation","r-15":"left rotation","n0":"neutral"})
-    remap_leg=dict({"P01f":"0 Stiffness","P01l":"Low Stiffness","P01m":"Middle Stiffness","P01h":"High Stiffness",})
-    
+    remap_leg=dict({"P01 f1":"Baseline 1 (No Stiffness)","P01 f":"Baseline 2 (No Stiffness)","P01 l":"Low Stiffness","P01 m":"Middle Stiffness","P01 h":"High Stiffness",})
+    factor=2
+    leg_size=30*factor
+    titl_size=30*factor
+    tck_size=20*factor
+    lab_size=20*factor
     muscles = ['(R) Sternocleidomastoid', '(L) Sternocleidomastoid','(R) Para spinal','(L) Para spinal']
     
     muscles = ['left SPL','right SPL','left STR','right STR']
@@ -574,17 +599,17 @@ def EMG_plot1p(part_conds,phase="full_cicle",save=False,debug=False, chans=[0,8,
     for m_n , muscle in enumerate(muscles):
             #print(f"Processsing {muscle}")
             ax = fig.add_subplot(len(muscles),1,m_n+1)
-            ax.set_title(muscle + " (" + phase+")",fontsize = 30)
-            plt.yticks(fontsize=15)
-            plt.xticks(fontsize=15)
+            ax.set_title(muscle + " (" + phase+")",fontsize = titl_size)
+            plt.yticks(fontsize=tck_size)
+            plt.xticks(fontsize=tck_size)
             if m_n==len(muscles)-1:
                 motion_relab= [remap_mot[m] for m in motions]
-                ax.set_xticks(np.arange(mot_N),motion_relab,fontsize=20)
+                ax.set_xticks(np.arange(mot_N),motion_relab,fontsize=tck_size)
             else:
                 ax.set_xticks(np.arange(mot_N),[]*mot_N)
             
             if norm==None:
-                ax.set_ylabel("Normalized EMG [$\mu V$]",fontsize=20)    
+                ax.set_ylabel("Mean EMG [$\mu V$]",fontsize=lab_size)    
             else:
                 ax.set_ylabel("Normalized EMG [-]")
                 
@@ -668,14 +693,16 @@ def EMG_plot1p(part_conds,phase="full_cicle",save=False,debug=False, chans=[0,8,
             # Plot the means as bars              
             ax.bar(x, abs(means), yerr=stds, align='center', alpha=0.7, width=0.5/Ncond, color=col*Ncond)
             if m_n==2:
-                ax.legend(handles=patches,bbox_to_anchor=(1, 0.8),fontsize=20)
+                ax.legend(handles=patches,bbox_to_anchor=(1, -1.4),fontsize=leg_size)
+                ax.set_ylim([0, 80])
+            else:
+                ax.set_ylim([0, max(abs(means))*1.1])
             plt.grid("on")
-            ax.set_ylim([0, max(abs(means))*1.1])
            # ax.update(hspace=0.5)
     time.sleep(4)
     #mng = plt.get_current_fig_manager()
     #mng.full_screen_toggle()  
-    plt.tight_layout(pad=3, w_pad=0.5, h_pad=0.50)    
+    #plt.tight_layout(pad=3, w_pad=0.5, h_pad=0.50)    
     if save:
                 plt.savefig(r"Plots/{} EMG profile {}.pdf".format(part_N,phase))
 

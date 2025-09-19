@@ -43,12 +43,12 @@ def RPY_and_EMG(trial,channels=[0,8,9,10],shaded=True,RPY_add=False,Filt_type=1,
     return figEMGRPY
     
 
-def RPY_mTrials(part,seg="head",ref_seg="",f_ref=True):
-    figRPY=plt.figure("angle accross trials")  
+def RPY_mTrials(part,seg="head",ref_seg="",f_ref=True,atype="YPR"):
+    figRPY=plt.figure(f"Angle accross trials. Format: {atype}")  
     axRPY=figRPY.add_subplot()
     for trial in part:
         leg_use = (trial == part[-1])     
-        RPYvsTime(trial,shaded=False,seg="head",ref_seg="",frame_ref=f_ref,ang_type="YPR",AX=axRPY,FIG=figRPY, leg=leg_use)
+        RPYvsTime(trial,shaded=False,seg="head",ref_seg="",frame_ref=f_ref,ang_type=atype,AX=axRPY,FIG=figRPY, leg=leg_use)
         
 
 def RPYvsTime(trial,shaded=False,seg="head",ref_seg="",frame_ref=True,ang_type="YPR",AX=None,FIG=None, leg=False):
@@ -75,9 +75,9 @@ def RPYvsTime(trial,shaded=False,seg="head",ref_seg="",frame_ref=True,ang_type="
         fref=None
     
     
-    ang=s_main.get_orient(s_ref,form=ang_type,frame_ref=fref)
+    ang=s_main.get_orient(s_ref, form=ang_type, frame_ref=fref)
     print(ang)
-    if AX:
+    if AX and ang_type=="YPR":
        ang=ang[:,1:2] 
     
     time= np.arange(ang.shape[0])/trial.sfmc
@@ -88,9 +88,12 @@ def RPYvsTime(trial,shaded=False,seg="head",ref_seg="",frame_ref=True,ang_type="
         fig=plt.figure(f"{trial.label} {seg} -> {ref_seg}. Time reference: {time_ref}. Trial: {trial.label}. Format: {ang_type}") 
     if AX:
         ax=AX
-        ax.set_title(r" Sagittal angle of the head during each trial")
-        plt.grid("on")
-                
+        if ang_type=="3dang":
+            ax.set_title(r" Spatial inclination of the head during each trial")
+        elif ang_type=="YPR":
+            ax.set_title(r" Sagittal angle of the head during each trial")           
+        plt.grid("on")            
+        
     else:
         ax = fig.add_subplot(1, 1, 1)
         ax.set_title(r"Rotation assesment for {} -> {} during the {:s} trial".format(seg,ref_seg,trial.label))

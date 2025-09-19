@@ -52,10 +52,10 @@ def crd2dict (file_addresses,n_mark= 15,n_chan=7):
         point_data = c['data']['points'][0:3,:,:]
     
         marker_dict=dict()
-    
+        
         for i , marker_name in enumerate(c['parameters']['POINT']['LABELS']["value"]):
             #mrk_name_wo_sub = marker_name.split(":")[-1]
-            marker_dict.update({marker_name: point_data[0:3,i,:].T}) 
+            marker_dict.update({marker_name: point_data[0:3,i,:].T})
             if i == n_mark:
                 break 
 
@@ -171,7 +171,7 @@ class trial_MOCAP_EMG:
         
         s_main=self.segs[seg]
         
-        RPY = s_main.YPR()
+        RPY = s_main.get_orient(form="YPR").T
         #RPY = self.RPY["head_abs"]
         time= np.arange(RPY.shape[1])/self.sfmc
         ax.plot(time,RPY.T)
@@ -248,7 +248,7 @@ class trial_MOCAP_EMG:
         flex_str= rflex[:,0:1]
         flex_str.sort(axis=0)
         
-        fref = int((flex_str[0,0]-1)*self.sfmc)  # Reference time occurs 1 second before the start of the first movement
+        fref = int((flex_str[0,0]-2)*self.sfmc)  # Reference time occurs 1 second before the start of the first movement
         
         RPY = s_main.get_orient(s_ref,frame_ref=fref,form="YPR")
         time = np.arange(RPY.shape[0])/self.sfmc

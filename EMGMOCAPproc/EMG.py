@@ -314,7 +314,7 @@ def mot_stats(trial , phase , channels=[0,8,9,10] , debug=False , Norm=[None] , 
         rflex = trial.Tbound[mt][:1,:].reshape([-1,2])
         rext = trial.Tbound[mt][1:,:].reshape([-1,2])
         
-        if phase == "full_cicle": 
+        if phase == "full_cycle": 
             cond = (np.logical_and(time > rflex[:,:1] , time < rext[:,1:2])).any(axis=0)
         elif phase == "0_50": 
             cond = (np.logical_and(time > rflex[:,:1] , time < (rext[:,:1])+rflex[:,1:2])/2).any(axis=0)
